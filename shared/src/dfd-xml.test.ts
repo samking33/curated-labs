@@ -263,7 +263,7 @@ describe("extractFromDrawioXml", () => {
       trustBoundaries: [],
     });
     const extracted = extractFromDrawioXml(compileToDrawioXml(graph));
-    expect(extracted.nodes[0].provider).toBeUndefined();
+    expect(extracted.nodes[0]!.provider).toBeUndefined();
   });
 });
 
