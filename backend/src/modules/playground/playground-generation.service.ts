@@ -370,6 +370,7 @@ export class PlaygroundGenerationService {
    *  bar validateGeneratedScenario applies at generation time, re-applied here
    *  because the learner can now change the DFD after generation. */
   async updateScenarioDfd(user: AuthContext, scenarioId: string, drawioXml: string): Promise<void> {
+    if (!isUuid(scenarioId)) throw new NotFoundException("Scenario not found.");
     const scenario = await this.prisma.playgroundGeneratedScenario.findUnique({ where: { id: scenarioId } });
     if (!scenario || scenario.userId !== user.userId) throw new NotFoundException("Scenario not found.");
 
