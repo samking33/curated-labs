@@ -1,0 +1,454 @@
+{
+  "category": {
+    "name": "Privacy",
+    "slug": "privacy",
+    "description": "Data protection threat modeling: consent, minimisation, retention, secondary use and cross-border transfer.",
+    "sortOrder": 1
+  },
+  "lab": {
+    "title": "Hospital Patient Portal",
+    "slug": "hospital-portal",
+    "summary": "A patient-facing portal exposing medical records, appointments and test results.",
+    "businessContext": "A hospital group is launching a portal so patients can read their own records and book appointments.",
+    "systemContext": "A patient web app reaches a portal API, which reads an electronic health record system, a lab results feed and an analytics warehouse.",
+    "difficulty": "intermediate",
+    "estimatedMinutes": 40,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "patient",
+        "type": "external_entity",
+        "label": "Patient",
+        "description": "Reads own records",
+        "trustBoundary": "internet",
+        "assets": [
+          "identity",
+          "medical_history"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "clinician",
+        "type": "external_entity",
+        "label": "Clinician",
+        "description": "Reviews and annotates records",
+        "trustBoundary": "staff_network",
+        "assets": [
+          "credentials"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "portal",
+        "type": "service",
+        "label": "Portal API",
+        "description": "Serves records to patients",
+        "trustBoundary": "clinical",
+        "assets": [
+          "medical_record"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "ehr",
+        "type": "data_store",
+        "label": "EHR System",
+        "description": "Authoritative patient records",
+        "trustBoundary": "clinical",
+        "assets": [
+          "diagnosis",
+          "medication",
+          "notes"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "labs",
+        "type": "service",
+        "label": "Lab Results Feed",
+        "description": "Ingests results from partner laboratories",
+        "trustBoundary": "clinical",
+        "assets": [
+          "test_result"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "warehouse",
+        "type": "data_store",
+        "label": "Analytics Warehouse",
+        "description": "Copy of records used for research and reporting",
+        "trustBoundary": "analytics",
+        "assets": [
+          "medical_record"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "sms",
+        "type": "third_party",
+        "label": "SMS Provider",
+        "description": "Sends appointment reminders",
+        "trustBoundary": "internet",
+        "assets": [
+          "phone",
+          "appointment"
+        ],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-patient-portal",
+        "source": "patient",
+        "target": "portal",
+        "label": "View records",
+        "protocol": "HTTPS",
+        "data": [
+          "identity"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-clinician-ehr",
+        "source": "clinician",
+        "target": "ehr",
+        "label": "Update record",
+        "protocol": "HTTPS",
+        "data": [
+          "notes"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-portal-ehr",
+        "source": "portal",
+        "target": "ehr",
+        "label": "Fetch record",
+        "protocol": "TLS",
+        "data": [
+          "medical_record"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-labs-ehr",
+        "source": "labs",
+        "target": "ehr",
+        "label": "Deliver result",
+        "protocol": "SFTP",
+        "data": [
+          "test_result"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-ehr-warehouse",
+        "source": "ehr",
+        "target": "warehouse",
+        "label": "Nightly replication",
+        "protocol": "TLS",
+        "data": [
+          "medical_record"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-portal-sms",
+        "source": "portal",
+        "target": "sms",
+        "label": "Send reminder",
+        "protocol": "HTTPS",
+        "data": [
+          "phone",
+          "appointment"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      {
+        "id": "internet",
+        "label": "Internet",
+        "description": "Untrusted public network"
+      },
+      {
+        "id": "staff_network",
+        "label": "Staff Network",
+        "description": "Hospital clinical staff network"
+      },
+      {
+        "id": "clinical",
+        "label": "Clinical Systems",
+        "description": "Regulated patient data environment"
+      },
+      {
+        "id": "analytics",
+        "label": "Analytics",
+        "description": "Secondary-use environment"
+      }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "full-copy-warehouse",
+      "title": "Full identifiable record copied to analytics nightly",
+      "description": "The entire record including diagnoses and notes replicates to an analytics environment with no de-identification and no stated purpose limitation.",
+      "affectedNodeIds": [
+        "warehouse",
+        "ehr"
+      ],
+      "affectedEdgeIds": [
+        "e-ehr-warehouse"
+      ],
+      "hint": "Does reporting need names and full clinical notes?"
+    },
+    {
+      "key": "sms-content",
+      "title": "Appointment reminders carry clinical context to a third party",
+      "description": "Reminder messages route through an external SMS provider with no stated limit on what the message body may contain.",
+      "affectedNodeIds": [
+        "sms",
+        "portal"
+      ],
+      "affectedEdgeIds": [
+        "e-portal-sms"
+      ],
+      "hint": "What does 'Your oncology appointment is Tuesday' tell the SMS vendor?"
+    },
+    {
+      "key": "no-proxy-access",
+      "title": "No model for proxy or restricted access",
+      "description": "Nothing describes how carers, parents or patients with restricted-access flags are handled, so the portal is all-or-nothing.",
+      "affectedNodeIds": [
+        "portal"
+      ],
+      "affectedEdgeIds": [
+        "e-patient-portal"
+      ],
+      "hint": "Who else might legitimately — or illegitimately — want to read this record?"
+    },
+    {
+      "key": "no-access-logging",
+      "title": "No described logging of who read a record",
+      "description": "Record reads are not attributed, so inappropriate access by staff cannot be detected or investigated.",
+      "affectedNodeIds": [
+        "ehr",
+        "clinician"
+      ],
+      "affectedEdgeIds": [
+        "e-clinician-ehr"
+      ],
+      "hint": "How would the hospital find out a clinician looked up a celebrity's notes?"
+    },
+    {
+      "key": "lab-feed-trust",
+      "title": "Lab results ingested with no described provenance check",
+      "description": "Results arrive over SFTP and are written to the record with no stated verification that they belong to the right patient.",
+      "affectedNodeIds": [
+        "labs",
+        "ehr"
+      ],
+      "affectedEdgeIds": [
+        "e-labs-ehr"
+      ],
+      "hint": "What happens clinically if a result lands on the wrong record?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "secondary-use",
+      "title": "Identifiable records used beyond the care purpose",
+      "description": "A full identifiable copy sitting in analytics invites uses the patient never consented to, and widens the blast radius of any analytics compromise to the entire clinical record.",
+      "category": "Information disclosure",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "warehouse"
+      ],
+      "affectedEdgeIds": [
+        "e-ehr-warehouse"
+      ],
+      "acceptedAliases": [
+        "secondary use",
+        "purpose limitation",
+        "no de-identification",
+        "analytics copy of PHI",
+        "data minimisation failure"
+      ],
+      "learnerExplanation": "Privacy harm often comes from legitimate data in an illegitimate context."
+    },
+    {
+      "key": "insider-snooping",
+      "title": "Staff read records with no clinical relationship",
+      "description": "Without attributed access logs, a curious or malicious staff member can read any patient's notes and never be detected.",
+      "category": "Information disclosure",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "ehr",
+        "clinician"
+      ],
+      "affectedEdgeIds": [
+        "e-clinician-ehr"
+      ],
+      "acceptedAliases": [
+        "insider threat",
+        "snooping",
+        "staff looking up patients",
+        "unauthorised access by employees",
+        "no audit of reads"
+      ],
+      "learnerExplanation": "In healthcare the most common breach is an insider, not an intruder."
+    },
+    {
+      "key": "sms-leak",
+      "title": "Clinical information disclosed via SMS",
+      "description": "Message content reveals the nature of care to the SMS vendor and to anyone who sees the patient's lock screen.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "sms"
+      ],
+      "affectedEdgeIds": [
+        "e-portal-sms"
+      ],
+      "acceptedAliases": [
+        "SMS leak",
+        "reminder reveals condition",
+        "third party sees health data",
+        "lock screen disclosure"
+      ],
+      "learnerExplanation": "A notification is a disclosure channel."
+    },
+    {
+      "key": "wrong-record",
+      "title": "Misattributed lab result written to the wrong patient",
+      "description": "An unverified feed can attach a result to the wrong record, which is a patient-safety incident as well as a privacy one.",
+      "category": "Tampering",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "labs",
+        "ehr"
+      ],
+      "affectedEdgeIds": [
+        "e-labs-ehr"
+      ],
+      "acceptedAliases": [
+        "wrong patient result",
+        "misattributed record",
+        "data integrity",
+        "result on wrong record"
+      ],
+      "learnerExplanation": "Integrity failures in clinical systems hurt people, not just data."
+    },
+    {
+      "key": "proxy-abuse",
+      "title": "Abusive family member reads a patient's records",
+      "description": "With no proxy model or restricted-access handling, someone with access to the patient's device or credentials sees everything.",
+      "category": "Information disclosure",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "portal"
+      ],
+      "affectedEdgeIds": [
+        "e-patient-portal"
+      ],
+      "acceptedAliases": [
+        "coercion",
+        "domestic abuse",
+        "proxy access",
+        "family member access",
+        "no restricted records"
+      ],
+      "learnerExplanation": "Threat models must include the people closest to the user."
+    }
+  ],
+  "mitigations": [
+    {
+      "key": "deidentify",
+      "title": "De-identify before replication to analytics",
+      "description": "Strip direct identifiers and apply purpose-scoped views so analytics never holds the full identifiable record."
+    },
+    {
+      "key": "access-audit",
+      "title": "Attributed, reviewed access logging on record reads",
+      "description": "Log who read which record and run proactive break-the-glass reviews."
+    },
+    {
+      "key": "minimal-notifications",
+      "title": "Content-free reminders",
+      "description": "Send 'you have an appointment' with no clinical detail and require the portal for specifics."
+    },
+    {
+      "key": "result-matching",
+      "title": "Verified patient matching on inbound results",
+      "description": "Match on multiple identifiers and quarantine anything ambiguous for human review."
+    },
+    {
+      "key": "restricted-access",
+      "title": "Proxy and restricted-access model",
+      "description": "Support carer proxies, sealed records and per-record restrictions with explicit consent."
+    },
+    {
+      "key": "tls-ingest",
+      "title": "Encrypt the lab feed in transit",
+      "description": "Already satisfied by SFTP; it does not address whether the result is matched to the right person."
+    },
+    {
+      "key": "password-policy",
+      "title": "Stronger password policy for staff",
+      "description": "Sensible hygiene, but it does not detect a legitimate login being used to snoop."
+    }
+  ],
+  "threatMitigations": [
+    {
+      "threatKey": "secondary-use",
+      "mitigationKey": "deidentify",
+      "isPrimary": true,
+      "explanation": "Analytics gets what it needs without holding the identifiable clinical record."
+    },
+    {
+      "threatKey": "insider-snooping",
+      "mitigationKey": "access-audit",
+      "isPrimary": true,
+      "explanation": "Attribution plus review is what makes inappropriate access detectable."
+    },
+    {
+      "threatKey": "sms-leak",
+      "mitigationKey": "minimal-notifications",
+      "isPrimary": true,
+      "explanation": "A message with no clinical content cannot disclose the condition."
+    },
+    {
+      "threatKey": "wrong-record",
+      "mitigationKey": "result-matching",
+      "isPrimary": true,
+      "explanation": "Multi-identifier matching with quarantine stops silent misattribution."
+    },
+    {
+      "threatKey": "proxy-abuse",
+      "mitigationKey": "restricted-access",
+      "isPrimary": true,
+      "explanation": "Sealed records and explicit proxies give the patient control over who sees what."
+    }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "do_not_ship",
+    "rationale": "Two critical findings sit at the heart of the design rather than at its edges. The unrestricted identifiable copy in analytics is a purpose-limitation failure that no access control on the portal can compensate for, and the absence of attributed read logging means the hospital could not detect or investigate insider snooping — historically the most common breach in healthcare. Both require changing how data moves, not adding a control at the perimeter. Regulatory exposure here is severe and the affected data is permanent and unchangeable.",
+    "suggestedConditions": [
+      "De-identify records before replication to analytics, with purpose-scoped views.",
+      "Implement attributed access logging with proactive review before any patient sees the portal.",
+      "Remove clinical content from SMS reminders.",
+      "Add verified patient matching on the inbound lab feed.",
+      "Design the proxy and restricted-access model before launch, not after."
+    ]
+  }
+}

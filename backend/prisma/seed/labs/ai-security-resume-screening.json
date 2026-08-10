@@ -1,0 +1,444 @@
+{
+  "category": {
+    "name": "AI Security",
+    "slug": "ai-security",
+    "description": "Threat modeling for LLM and ML systems: prompt injection, data exfiltration, tool abuse and training-data risk.",
+    "sortOrder": 2
+  },
+  "lab": {
+    "title": "AI Resume Screening",
+    "slug": "resume-screening",
+    "summary": "An ML pipeline that ranks job applicants, where the training data and the decisions both carry risk.",
+    "businessContext": "A recruitment platform is adding automatic candidate ranking to help employers shortlist applicants.",
+    "systemContext": "Applicants upload CVs to an intake service, a parser extracts features, a scoring model ranks candidates, and employers see a ranked shortlist. Past hiring decisions feed model retraining.",
+    "difficulty": "intermediate",
+    "estimatedMinutes": 35,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "applicant",
+        "type": "external_entity",
+        "label": "Applicant",
+        "description": "Uploads a CV",
+        "trustBoundary": "internet",
+        "assets": [
+          "cv",
+          "personal_data"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "intake",
+        "type": "service",
+        "label": "Intake Service",
+        "description": "Accepts and stores uploaded CVs",
+        "trustBoundary": "platform",
+        "assets": [
+          "cv"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "parser",
+        "type": "process",
+        "label": "CV Parser",
+        "description": "Extracts structured features from documents",
+        "trustBoundary": "platform",
+        "assets": [
+          "parsed_features"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "model",
+        "type": "service",
+        "label": "Scoring Model",
+        "description": "Ranks candidates for a role",
+        "trustBoundary": "platform",
+        "assets": [
+          "score"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "employer",
+        "type": "external_entity",
+        "label": "Employer",
+        "description": "Views the ranked shortlist",
+        "trustBoundary": "internet",
+        "assets": [
+          "shortlist"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "training",
+        "type": "data_store",
+        "label": "Training Store",
+        "description": "Historical applications and hiring outcomes",
+        "trustBoundary": "platform",
+        "assets": [
+          "historical_decisions"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "blob",
+        "type": "data_store",
+        "label": "Document Store",
+        "description": "Raw uploaded CV files",
+        "trustBoundary": "platform",
+        "assets": [
+          "cv"
+        ],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-app-intake",
+        "source": "applicant",
+        "target": "intake",
+        "label": "Upload CV",
+        "protocol": "HTTPS",
+        "data": [
+          "cv"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-intake-blob",
+        "source": "intake",
+        "target": "blob",
+        "label": "Store document",
+        "protocol": "TLS",
+        "data": [
+          "cv"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-intake-parser",
+        "source": "intake",
+        "target": "parser",
+        "label": "Parse document",
+        "protocol": "HTTP",
+        "data": [
+          "cv"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-parser-model",
+        "source": "parser",
+        "target": "model",
+        "label": "Score candidate",
+        "protocol": "HTTP",
+        "data": [
+          "parsed_features"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-model-employer",
+        "source": "model",
+        "target": "employer",
+        "label": "Ranked shortlist",
+        "protocol": "HTTPS",
+        "data": [
+          "shortlist",
+          "score"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-outcomes-training",
+        "source": "model",
+        "target": "training",
+        "label": "Log outcome for retraining",
+        "protocol": "TLS",
+        "data": [
+          "historical_decisions"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      {
+        "id": "internet",
+        "label": "Internet",
+        "description": "Untrusted public network"
+      },
+      {
+        "id": "platform",
+        "label": "Platform",
+        "description": "Internal pipeline and data stores"
+      }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "parser-untrusted-input",
+      "title": "Documents parsed without treating them as hostile input",
+      "description": "Uploaded files go straight into a document parser with no stated sandboxing, type validation or size limit.",
+      "affectedNodeIds": [
+        "parser",
+        "intake"
+      ],
+      "affectedEdgeIds": [
+        "e-intake-parser"
+      ],
+      "hint": "A CV is a file from a stranger on the internet. What is it being opened by?"
+    },
+    {
+      "key": "feedback-loop",
+      "title": "Model retrains on its own past decisions",
+      "description": "Historical outcomes feed retraining with no described correction, so the model's own bias becomes tomorrow's ground truth.",
+      "affectedNodeIds": [
+        "training",
+        "model"
+      ],
+      "affectedEdgeIds": [
+        "e-outcomes-training"
+      ],
+      "hint": "If the model was wrong last year, what does it learn from this year?"
+    },
+    {
+      "key": "no-explanation",
+      "title": "No explanation or appeal path for a ranking",
+      "description": "Candidates are ranked with no stated ability to see why or contest the outcome.",
+      "affectedNodeIds": [
+        "model",
+        "employer"
+      ],
+      "affectedEdgeIds": [
+        "e-model-employer"
+      ],
+      "hint": "What does a rejected applicant get told?"
+    },
+    {
+      "key": "cv-retention",
+      "title": "Raw CVs retained indefinitely",
+      "description": "Uploaded documents containing addresses, dates of birth and employment history persist with no stated retention limit.",
+      "affectedNodeIds": [
+        "blob"
+      ],
+      "affectedEdgeIds": [
+        "e-intake-blob"
+      ],
+      "hint": "How long should a rejected application's documents live?"
+    },
+    {
+      "key": "no-protected-attr-check",
+      "title": "No described check on proxies for protected attributes",
+      "description": "Nothing states that features correlated with age, sex, ethnicity or disability are excluded or monitored.",
+      "affectedNodeIds": [
+        "parser",
+        "model"
+      ],
+      "affectedEdgeIds": [
+        "e-parser-model"
+      ],
+      "hint": "Postcode and graduation year are not neutral features."
+    }
+  ],
+  "threats": [
+    {
+      "key": "malicious-document",
+      "title": "Malicious document achieves code execution in the parser",
+      "description": "A crafted CV exploits the parsing library and runs code inside the platform, giving the attacker a foothold next to every applicant's personal data.",
+      "category": "Elevation of privilege",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "parser"
+      ],
+      "affectedEdgeIds": [
+        "e-intake-parser"
+      ],
+      "acceptedAliases": [
+        "malicious upload",
+        "parser exploit",
+        "RCE via document",
+        "file upload attack",
+        "crafted PDF"
+      ],
+      "learnerExplanation": "Document parsers are a classic remote code execution surface."
+    },
+    {
+      "key": "bias-amplification",
+      "title": "Discriminatory ranking amplified by the feedback loop",
+      "description": "The model learns from biased historical decisions and its own outputs, entrenching discrimination against protected groups and creating direct legal exposure.",
+      "category": "Tampering",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "model",
+        "training"
+      ],
+      "affectedEdgeIds": [
+        "e-outcomes-training"
+      ],
+      "acceptedAliases": [
+        "bias",
+        "discrimination",
+        "unfair model",
+        "feedback loop",
+        "proxy discrimination",
+        "disparate impact"
+      ],
+      "learnerExplanation": "In decision systems, fairness failures are security failures with a different victim."
+    },
+    {
+      "key": "cv-injection",
+      "title": "Applicant manipulates their own ranking through crafted content",
+      "description": "Hidden text or keyword stuffing in the document steers the parser or model into scoring the candidate higher than merited.",
+      "category": "Tampering",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "parser",
+        "model"
+      ],
+      "affectedEdgeIds": [
+        "e-intake-parser"
+      ],
+      "acceptedAliases": [
+        "keyword stuffing",
+        "hidden white text",
+        "gaming the model",
+        "adversarial input",
+        "CV injection"
+      ],
+      "learnerExplanation": "When the subject of a decision controls its input, expect manipulation."
+    },
+    {
+      "key": "cv-breach",
+      "title": "Bulk disclosure of applicant documents",
+      "description": "An indefinitely retained store of CVs is a rich identity-theft target containing addresses, dates of birth and employment history.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "blob"
+      ],
+      "affectedEdgeIds": [
+        "e-intake-blob"
+      ],
+      "acceptedAliases": [
+        "CV leak",
+        "document store breach",
+        "applicant data exposed",
+        "PII breach"
+      ],
+      "learnerExplanation": "Retention is the multiplier on every storage compromise."
+    },
+    {
+      "key": "no-recourse",
+      "title": "Candidates cannot contest an automated rejection",
+      "description": "Without explanation or human review, an incorrect ranking is unappealable and in many jurisdictions unlawful.",
+      "category": "Repudiation",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "model",
+        "employer"
+      ],
+      "affectedEdgeIds": [
+        "e-model-employer"
+      ],
+      "acceptedAliases": [
+        "no appeal",
+        "no explainability",
+        "automated decision making",
+        "no human review",
+        "GDPR article 22"
+      ],
+      "learnerExplanation": "Automated decisions about people carry procedural obligations."
+    }
+  ],
+  "mitigations": [
+    {
+      "key": "sandbox-parser",
+      "title": "Parse documents in an isolated sandbox",
+      "description": "Run parsing in a locked-down container with no network and no access to applicant data, with strict type and size validation."
+    },
+    {
+      "key": "bias-controls",
+      "title": "Curated training data plus fairness monitoring",
+      "description": "Break the self-training loop, exclude proxies for protected attributes, and test outcomes across groups on a schedule."
+    },
+    {
+      "key": "normalise-input",
+      "title": "Normalise extracted text and detect manipulation",
+      "description": "Strip hidden and invisible content, and flag statistically anomalous keyword patterns for human review."
+    },
+    {
+      "key": "cv-retention-limit",
+      "title": "Delete raw documents on a retention schedule",
+      "description": "Purge documents a fixed period after the role closes, keeping only what is legally required."
+    },
+    {
+      "key": "human-review",
+      "title": "Human review and an explanation for every rejection",
+      "description": "Keep a person in the loop for adverse outcomes and give candidates the main factors plus an appeal route."
+    },
+    {
+      "key": "virus-scan",
+      "title": "Antivirus scan on upload",
+      "description": "Catches known malware but not a novel exploit against the parsing library itself."
+    },
+    {
+      "key": "encrypt-at-rest",
+      "title": "Encrypt the document store at rest",
+      "description": "Good baseline hygiene; it does nothing about retention, bias or parser compromise."
+    }
+  ],
+  "threatMitigations": [
+    {
+      "threatKey": "malicious-document",
+      "mitigationKey": "sandbox-parser",
+      "isPrimary": true,
+      "explanation": "Isolation contains a parser compromise so it cannot reach applicant data."
+    },
+    {
+      "threatKey": "bias-amplification",
+      "mitigationKey": "bias-controls",
+      "isPrimary": true,
+      "explanation": "Breaking the feedback loop and testing across groups is what stops entrenchment."
+    },
+    {
+      "threatKey": "cv-injection",
+      "mitigationKey": "normalise-input",
+      "isPrimary": true,
+      "explanation": "Removing hidden content denies the manipulation its channel."
+    },
+    {
+      "threatKey": "cv-breach",
+      "mitigationKey": "cv-retention-limit",
+      "isPrimary": true,
+      "explanation": "Deleted documents cannot be stolen."
+    },
+    {
+      "threatKey": "no-recourse",
+      "mitigationKey": "human-review",
+      "isPrimary": true,
+      "explanation": "A human decision-maker and an explanation restore recourse."
+    }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "do_not_ship",
+    "rationale": "This system makes consequential decisions about people's livelihoods, which raises the bar. The parser is an unsandboxed remote code execution surface sitting next to every applicant's personal data, and the retraining loop actively amplifies historical bias with no fairness monitoring — a harm that compounds silently and carries direct legal exposure. Neither is a control you can bolt on at the edge. A defensible interim position is to ship the parsing and search features with no automated ranking at all.",
+    "suggestedConditions": [
+      "Sandbox document parsing with no network access before accepting any upload.",
+      "Break the self-training feedback loop and add fairness testing across protected groups.",
+      "Introduce human review and an explanation for every adverse decision.",
+      "Set and enforce a document retention limit.",
+      "Normalise extracted text to strip hidden manipulation."
+    ]
+  }
+}

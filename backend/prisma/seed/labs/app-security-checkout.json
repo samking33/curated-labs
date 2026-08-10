@@ -1,0 +1,567 @@
+{
+  "category": {
+    "name": "App Security",
+    "slug": "app-security",
+    "description": "Application-layer threat modeling: authentication, sessions, data handling and third-party integrations.",
+    "sortOrder": 0
+  },
+  "lab": {
+    "title": "E-Commerce Checkout",
+    "slug": "ecommerce-checkout",
+    "summary": "Analyze a checkout flow that processes user accounts, payments, and order data.",
+    "businessContext": "A retail company is launching a checkout flow for authenticated customers. Card data is handled by a third-party processor, but the platform stores order history, addresses, and partial card metadata.",
+    "systemContext": "A browser client talks to a Next.js storefront, which calls an internal orders API. The API reads and writes an orders database, caches sessions in Redis, and calls an external payment processor. Fulfilment events are published to a queue consumed by a warehouse service.",
+    "difficulty": "beginner",
+    "estimatedMinutes": 30,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "customer",
+        "type": "external_entity",
+        "label": "Customer",
+        "description": "Authenticated shopper completing a purchase in a browser.",
+        "trustBoundary": "internet",
+        "assets": [
+          "email",
+          "session_cookie",
+          "shipping_address",
+          "card_number"
+        ]
+      },
+      {
+        "id": "storefront",
+        "type": "process",
+        "label": "Storefront Web",
+        "description": "Server-rendered storefront. Terminates the user session and proxies checkout calls to the orders API.",
+        "trustBoundary": "public_dmz",
+        "assets": [
+          "session_cookie",
+          "csrf_token"
+        ]
+      },
+      {
+        "id": "orders_api",
+        "type": "service",
+        "label": "Orders API",
+        "description": "Internal service that validates carts, prices orders, and orchestrates payment and fulfilment.",
+        "trustBoundary": "private_network",
+        "assets": [
+          "order",
+          "customer_profile",
+          "internal_api_key"
+        ]
+      },
+      {
+        "id": "session_cache",
+        "type": "data_store",
+        "label": "Session Cache",
+        "description": "Redis instance holding session records and cart state. No TLS configured on the internal link.",
+        "trustBoundary": "private_network",
+        "assets": [
+          "session_id",
+          "cart",
+          "user_id"
+        ]
+      },
+      {
+        "id": "orders_db",
+        "type": "data_store",
+        "label": "Orders Database",
+        "description": "PostgreSQL store for orders, addresses, and the last four digits of the card used.",
+        "trustBoundary": "private_network",
+        "assets": [
+          "order_history",
+          "shipping_address",
+          "card_last_four"
+        ]
+      },
+      {
+        "id": "payments",
+        "type": "third_party",
+        "label": "Payment Processor",
+        "description": "External PCI-compliant processor. Receives card data and returns an authorization token plus asynchronous webhooks.",
+        "trustBoundary": "internet",
+        "assets": [
+          "card_number",
+          "auth_token"
+        ]
+      },
+      {
+        "id": "fulfilment_queue",
+        "type": "queue",
+        "label": "Fulfilment Queue",
+        "description": "Message queue carrying paid-order events to the warehouse. Messages include full shipping addresses.",
+        "trustBoundary": "private_network",
+        "assets": [
+          "order_id",
+          "shipping_address"
+        ]
+      },
+      {
+        "id": "warehouse",
+        "type": "service",
+        "label": "Warehouse Service",
+        "description": "Consumes fulfilment events and triggers physical shipment. Operated by a logistics vendor inside the network perimeter.",
+        "trustBoundary": "private_network",
+        "assets": [
+          "shipping_address",
+          "order_id"
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-customer-storefront",
+        "source": "customer",
+        "target": "storefront",
+        "label": "Checkout request",
+        "protocol": "HTTPS",
+        "data": [
+          "session_cookie",
+          "cart",
+          "shipping_address"
+        ],
+        "trustBoundaryCrossing": true
+      },
+      {
+        "id": "e-storefront-orders",
+        "source": "storefront",
+        "target": "orders_api",
+        "label": "Create order",
+        "protocol": "HTTP",
+        "data": [
+          "user_id",
+          "cart",
+          "internal_api_key"
+        ],
+        "trustBoundaryCrossing": true
+      },
+      {
+        "id": "e-storefront-cache",
+        "source": "storefront",
+        "target": "session_cache",
+        "label": "Read/write session",
+        "protocol": "RESP (plaintext)",
+        "data": [
+          "session_id",
+          "user_id"
+        ],
+        "trustBoundaryCrossing": true
+      },
+      {
+        "id": "e-orders-db",
+        "source": "orders_api",
+        "target": "orders_db",
+        "label": "Persist order",
+        "protocol": "TLS/Postgres",
+        "data": [
+          "order_history",
+          "shipping_address",
+          "card_last_four"
+        ],
+        "trustBoundaryCrossing": false
+      },
+      {
+        "id": "e-orders-payments",
+        "source": "orders_api",
+        "target": "payments",
+        "label": "Authorize payment",
+        "protocol": "HTTPS",
+        "data": [
+          "card_number",
+          "amount"
+        ],
+        "trustBoundaryCrossing": true
+      },
+      {
+        "id": "e-payments-orders",
+        "source": "payments",
+        "target": "orders_api",
+        "label": "Payment webhook",
+        "protocol": "HTTPS",
+        "data": [
+          "auth_token",
+          "order_id"
+        ],
+        "trustBoundaryCrossing": true
+      },
+      {
+        "id": "e-orders-queue",
+        "source": "orders_api",
+        "target": "fulfilment_queue",
+        "label": "Publish paid order",
+        "protocol": "AMQP",
+        "data": [
+          "order_id",
+          "shipping_address"
+        ],
+        "trustBoundaryCrossing": false
+      },
+      {
+        "id": "e-queue-warehouse",
+        "source": "fulfilment_queue",
+        "target": "warehouse",
+        "label": "Consume event",
+        "protocol": "AMQP",
+        "data": [
+          "order_id",
+          "shipping_address"
+        ],
+        "trustBoundaryCrossing": false
+      }
+    ],
+    "trustBoundaries": [
+      {
+        "id": "internet",
+        "label": "Internet",
+        "description": "Untrusted public network and third parties outside the company perimeter."
+      },
+      {
+        "id": "public_dmz",
+        "label": "Public DMZ",
+        "description": "Internet-facing tier that terminates TLS and holds user sessions."
+      },
+      {
+        "id": "private_network",
+        "label": "Private Network",
+        "description": "Internal services and data stores not directly reachable from the internet."
+      }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "plaintext-session-store",
+      "title": "Session store holds plaintext session data",
+      "description": "The storefront writes session material to a Redis-style cache over an unencrypted protocol and the cache itself applies no encryption at rest. Anything able to read that cache can impersonate a signed-in customer.",
+      "affectedNodeIds": [
+        "session_cache",
+        "storefront"
+      ],
+      "affectedEdgeIds": [
+        "e-storefront-cache"
+      ],
+      "hint": "Look at the protocol label on the flow into the cache."
+    },
+    {
+      "key": "internal-plaintext-hop",
+      "title": "Internal traffic between web tier and API is unencrypted",
+      "description": "The storefront calls the orders API over plain HTTP while crossing from the public DMZ into the private network. A trust boundary is crossed without transport protection.",
+      "affectedNodeIds": [
+        "storefront",
+        "orders_api"
+      ],
+      "affectedEdgeIds": [
+        "e-storefront-orders"
+      ],
+      "hint": "Compare the protocol on this flow with the one used to reach the database."
+    },
+    {
+      "key": "unauthenticated-webhook",
+      "title": "Payment webhook has no stated authentication",
+      "description": "The payment processor calls back into the orders API. Nothing in the design describes signature verification or replay protection on that inbound callback.",
+      "affectedNodeIds": [
+        "payments",
+        "orders_api"
+      ],
+      "affectedEdgeIds": [
+        "e-payments-orders"
+      ],
+      "hint": "Who else on the internet can reach that callback endpoint?"
+    },
+    {
+      "key": "queue-no-authz",
+      "title": "Fulfilment queue has no consumer authorization",
+      "description": "Paid-order events carrying customer addresses flow to a queue consumed by the warehouse service with no described authentication between the queue and its consumers.",
+      "affectedNodeIds": [
+        "fulfilment_queue",
+        "warehouse"
+      ],
+      "affectedEdgeIds": [
+        "e-orders-queue",
+        "e-queue-warehouse"
+      ],
+      "hint": "What stops another service from subscribing to this topic?"
+    },
+    {
+      "key": "pii-in-orders-db",
+      "title": "Order database concentrates customer PII",
+      "description": "Addresses, contact details and partial card metadata all sit in one database with no described field-level protection or retention limit.",
+      "affectedNodeIds": [
+        "orders_db"
+      ],
+      "affectedEdgeIds": [
+        "e-orders-db"
+      ],
+      "hint": "Think about blast radius if a single credential leaks."
+    },
+    {
+      "key": "no-rate-limiting",
+      "title": "No rate limiting on the checkout entry point",
+      "description": "Nothing in the architecture describes throttling on the customer-facing checkout flow, leaving both card testing and credential stuffing unbounded.",
+      "affectedNodeIds": [
+        "customer",
+        "storefront"
+      ],
+      "affectedEdgeIds": [
+        "e-customer-storefront"
+      ],
+      "hint": "What stops an attacker from trying thousands of cards?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "session-hijack",
+      "title": "Session hijacking via unencrypted session cache",
+      "description": "An attacker with read access to the session cache — through a misconfiguration, a shared network segment, or a compromised neighbouring service — can lift a live session identifier and act as that customer without ever seeing their password.",
+      "category": "Spoofing",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "session_cache"
+      ],
+      "affectedEdgeIds": [
+        "e-storefront-cache"
+      ],
+      "acceptedAliases": [
+        "session theft",
+        "stolen session token",
+        "cookie theft from cache",
+        "account takeover via session",
+        "impersonation using cached session"
+      ],
+      "learnerExplanation": "Sessions are bearer credentials. Anything that can read them can become the user."
+    },
+    {
+      "key": "mitm-internal",
+      "title": "Man-in-the-middle on the DMZ to private network hop",
+      "description": "The plain HTTP call from the storefront to the orders API crosses a trust boundary. An attacker positioned on that segment can read order contents and tamper with prices or quantities in flight.",
+      "category": "Tampering",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "storefront",
+        "orders_api"
+      ],
+      "affectedEdgeIds": [
+        "e-storefront-orders"
+      ],
+      "acceptedAliases": [
+        "MITM",
+        "man in the middle",
+        "unencrypted internal traffic",
+        "sniffing internal API calls",
+        "tampering with order data in transit"
+      ],
+      "learnerExplanation": "A trust boundary crossing without transport security is an interception point."
+    },
+    {
+      "key": "webhook-forgery",
+      "title": "Forged payment confirmation webhook",
+      "description": "Without signature verification an attacker can POST a fake 'payment succeeded' callback to the orders API, causing goods to ship for an order that was never paid for.",
+      "category": "Spoofing",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "payments",
+        "orders_api"
+      ],
+      "affectedEdgeIds": [
+        "e-payments-orders"
+      ],
+      "acceptedAliases": [
+        "fake webhook",
+        "spoofed payment callback",
+        "unauthenticated callback",
+        "replay of payment notification",
+        "forged payment confirmation"
+      ],
+      "learnerExplanation": "An inbound callback from a third party is untrusted input until proven otherwise."
+    },
+    {
+      "key": "pii-disclosure",
+      "title": "Bulk disclosure of customer PII from the order database",
+      "description": "A single compromised credential or an injection flaw in the orders API exposes every stored address, contact detail and partial card record at once.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "orders_db",
+        "orders_api"
+      ],
+      "affectedEdgeIds": [
+        "e-orders-db"
+      ],
+      "acceptedAliases": [
+        "data breach",
+        "PII leak",
+        "customer data exposure",
+        "database dump",
+        "personal data disclosure"
+      ],
+      "learnerExplanation": "Concentrated personal data raises the cost of any single failure."
+    },
+    {
+      "key": "card-testing",
+      "title": "Card testing through the unthrottled checkout",
+      "description": "An attacker drives stolen card numbers through checkout to discover which are live. The retailer absorbs the processor fees and risks losing its merchant standing.",
+      "category": "Denial of service",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "customer",
+        "storefront",
+        "payments"
+      ],
+      "affectedEdgeIds": [
+        "e-customer-storefront",
+        "e-orders-payments"
+      ],
+      "acceptedAliases": [
+        "card cycling",
+        "carding",
+        "brute force payments",
+        "BIN attack",
+        "payment abuse"
+      ],
+      "learnerExplanation": "Fraud abuse is a threat even when no data is disclosed."
+    },
+    {
+      "key": "queue-tamper",
+      "title": "Unauthorized consumption or injection on the fulfilment queue",
+      "description": "With no consumer authentication, an attacker who reaches the queue can read customer shipping addresses or inject fabricated fulfilment events to have goods dispatched.",
+      "category": "Elevation of privilege",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "fulfilment_queue",
+        "warehouse"
+      ],
+      "affectedEdgeIds": [
+        "e-orders-queue",
+        "e-queue-warehouse"
+      ],
+      "acceptedAliases": [
+        "queue poisoning",
+        "fake fulfilment event",
+        "unauthorized queue access",
+        "message injection",
+        "rogue consumer"
+      ],
+      "learnerExplanation": "Message infrastructure needs the same authorization discipline as an API."
+    },
+    {
+      "key": "repudiation",
+      "title": "Insufficient audit trail for order and payment changes",
+      "description": "No described logging of who changed an order or when a payment state transitioned, so a disputed or fraudulent transaction cannot be reconstructed afterwards.",
+      "category": "Repudiation",
+      "expectedPriority": "low",
+      "affectedNodeIds": [
+        "orders_api",
+        "orders_db"
+      ],
+      "affectedEdgeIds": [],
+      "acceptedAliases": [
+        "no audit log",
+        "cannot prove what happened",
+        "missing logging",
+        "no traceability",
+        "dispute resolution"
+      ],
+      "learnerExplanation": "Repudiation is the quietest STRIDE category and the easiest to forget."
+    }
+  ],
+  "mitigations": [
+    {
+      "key": "encrypt-session-store",
+      "title": "Encrypt session store and require authenticated TLS to it",
+      "description": "Terminate TLS on the cache, require credentials, and encrypt session payloads at rest so a read of the store yields nothing usable."
+    },
+    {
+      "key": "mtls-internal",
+      "title": "Mutual TLS between the web tier and internal services",
+      "description": "Require mTLS on every trust boundary crossing so internal hops are both encrypted and mutually authenticated."
+    },
+    {
+      "key": "verify-webhook",
+      "title": "Verify webhook signatures and reject replays",
+      "description": "Validate the processor's HMAC signature over the raw body, enforce a timestamp window, and reject duplicate event identifiers."
+    },
+    {
+      "key": "encrypt-pii",
+      "title": "Field-level encryption plus retention limits on customer data",
+      "description": "Encrypt personal fields with a separately managed key, tokenize card metadata, and delete records past their retention window."
+    },
+    {
+      "key": "rate-limit-checkout",
+      "title": "Rate limiting and velocity checks on checkout",
+      "description": "Throttle per account, per IP and per card fingerprint, with escalating friction on repeated failed authorizations."
+    },
+    {
+      "key": "queue-authz",
+      "title": "Authenticated queue with per-consumer authorization",
+      "description": "Require credentials to publish or subscribe and scope each consumer to only the topics its role needs."
+    },
+    {
+      "key": "audit-logging",
+      "title": "Append-only audit log for order and payment state changes",
+      "description": "Record actor, action, before and after state to storage the application cannot rewrite."
+    },
+    {
+      "key": "waf",
+      "title": "Web application firewall in front of the storefront",
+      "description": "A useful perimeter control that blocks common injection and bot patterns, but it does not address any of the design flaws in this system."
+    }
+  ],
+  "threatMitigations": [
+    {
+      "threatKey": "session-hijack",
+      "mitigationKey": "encrypt-session-store",
+      "isPrimary": true,
+      "explanation": "Removes the plaintext session material an attacker would need to steal."
+    },
+    {
+      "threatKey": "mitm-internal",
+      "mitigationKey": "mtls-internal",
+      "isPrimary": true,
+      "explanation": "Encrypts and authenticates the boundary crossing, closing the interception point."
+    },
+    {
+      "threatKey": "webhook-forgery",
+      "mitigationKey": "verify-webhook",
+      "isPrimary": true,
+      "explanation": "Signature and replay checks mean only the real processor can confirm a payment."
+    },
+    {
+      "threatKey": "pii-disclosure",
+      "mitigationKey": "encrypt-pii",
+      "isPrimary": true,
+      "explanation": "Limits what a single leaked credential yields and shrinks the retained dataset."
+    },
+    {
+      "threatKey": "card-testing",
+      "mitigationKey": "rate-limit-checkout",
+      "isPrimary": true,
+      "explanation": "Velocity limits make bulk card testing uneconomic."
+    },
+    {
+      "threatKey": "queue-tamper",
+      "mitigationKey": "queue-authz",
+      "isPrimary": true,
+      "explanation": "Only authorized services can publish or consume fulfilment events."
+    },
+    {
+      "threatKey": "repudiation",
+      "mitigationKey": "audit-logging",
+      "isPrimary": true,
+      "explanation": "An append-only trail makes disputed transactions reconstructable."
+    }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "ship_with_conditions",
+    "rationale": "Two critical issues — the plaintext session store and the unauthenticated payment webhook — are exploitable with no privileged position and lead directly to account takeover and unpaid fulfilment. Neither requires a re-architecture; both are contained, well-understood fixes. A defensible position is to hold the launch until those two are closed and to schedule the transport and data-protection work behind them. Arguing for 'do not ship' is also reasonable if the team cannot commit to a date for the webhook fix.",
+    "suggestedConditions": [
+      "Encrypt the session store and require authenticated TLS before public launch.",
+      "Verify payment webhook signatures with replay protection before accepting live payments.",
+      "Commit to a dated plan for mTLS on the DMZ to private network hop.",
+      "Enable checkout rate limiting ahead of the first marketing campaign.",
+      "Turn on audit logging for order and payment state transitions."
+    ]
+  }
+}

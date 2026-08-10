@@ -1,0 +1,447 @@
+{
+  "category": {
+    "name": "App Security",
+    "slug": "app-security",
+    "description": "Application-layer threat modeling: authentication, sessions, data handling and third-party integrations.",
+    "sortOrder": 0
+  },
+  "lab": {
+    "title": "Food Delivery Platform",
+    "slug": "food-delivery",
+    "summary": "A three-sided marketplace where customers, restaurants and couriers share live order and location data.",
+    "businessContext": "A delivery startup is launching a platform connecting customers, restaurants and gig couriers.",
+    "systemContext": "A customer app and a courier app talk to an orders API, which coordinates a restaurant portal, a live location service and a payments provider.",
+    "difficulty": "beginner",
+    "estimatedMinutes": 30,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "customer",
+        "type": "external_entity",
+        "label": "Customer App",
+        "description": "Places orders and tracks delivery",
+        "trustBoundary": "internet",
+        "assets": [
+          "address",
+          "payment_token"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "courier",
+        "type": "external_entity",
+        "label": "Courier App",
+        "description": "Accepts jobs and shares location",
+        "trustBoundary": "internet",
+        "assets": [
+          "location",
+          "courier_id"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "orders_api",
+        "type": "service",
+        "label": "Orders API",
+        "description": "Coordinates the order lifecycle",
+        "trustBoundary": "platform",
+        "assets": [
+          "order",
+          "address"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "restaurant",
+        "type": "external_entity",
+        "label": "Restaurant Portal",
+        "description": "Accepts and prepares orders",
+        "trustBoundary": "internet",
+        "assets": [
+          "menu",
+          "order"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "location",
+        "type": "service",
+        "label": "Location Service",
+        "description": "Streams courier position to customers",
+        "trustBoundary": "platform",
+        "assets": [
+          "location"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "orders_db",
+        "type": "data_store",
+        "label": "Orders Database",
+        "description": "Orders, addresses and contact details",
+        "trustBoundary": "platform",
+        "assets": [
+          "address",
+          "phone"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "payments",
+        "type": "third_party",
+        "label": "Payment Provider",
+        "description": "Charges the customer",
+        "trustBoundary": "internet",
+        "assets": [
+          "payment_token"
+        ],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-cust-api",
+        "source": "customer",
+        "target": "orders_api",
+        "label": "Place order",
+        "protocol": "HTTPS",
+        "data": [
+          "address",
+          "payment_token"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-rest-api",
+        "source": "restaurant",
+        "target": "orders_api",
+        "label": "Accept order",
+        "protocol": "HTTPS",
+        "data": [
+          "order"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-courier-loc",
+        "source": "courier",
+        "target": "location",
+        "label": "Stream position",
+        "protocol": "WebSocket",
+        "data": [
+          "location"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-loc-cust",
+        "source": "location",
+        "target": "customer",
+        "label": "Live tracking",
+        "protocol": "WebSocket",
+        "data": [
+          "location"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-api-db",
+        "source": "orders_api",
+        "target": "orders_db",
+        "label": "Persist order",
+        "protocol": "TLS/Postgres",
+        "data": [
+          "address",
+          "phone"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-api-pay",
+        "source": "orders_api",
+        "target": "payments",
+        "label": "Charge card",
+        "protocol": "HTTPS",
+        "data": [
+          "payment_token"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-api-loc",
+        "source": "orders_api",
+        "target": "location",
+        "label": "Assign courier",
+        "protocol": "HTTP",
+        "data": [
+          "courier_id",
+          "order"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      {
+        "id": "internet",
+        "label": "Internet",
+        "description": "Untrusted public network"
+      },
+      {
+        "id": "platform",
+        "label": "Platform",
+        "description": "Internal services and data"
+      }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "idor-orders",
+      "title": "No described authorization on order lookup",
+      "description": "Nothing states that an order can only be read by the customer who placed it, the assigned courier and the restaurant.",
+      "affectedNodeIds": [
+        "orders_api",
+        "orders_db"
+      ],
+      "affectedEdgeIds": [
+        "e-cust-api"
+      ],
+      "hint": "What stops one customer requesting another customer's order id?"
+    },
+    {
+      "key": "location-broadcast",
+      "title": "Live location stream has no described scoping",
+      "description": "Courier positions flow to customers over a WebSocket with no stated check that the customer is the one this courier is delivering to.",
+      "affectedNodeIds": [
+        "location",
+        "courier"
+      ],
+      "affectedEdgeIds": [
+        "e-loc-cust"
+      ],
+      "hint": "Who is allowed to watch a given courier move?"
+    },
+    {
+      "key": "address-retention",
+      "title": "Delivery addresses retained indefinitely",
+      "description": "Home addresses and phone numbers persist in the orders database with no stated retention limit.",
+      "affectedNodeIds": [
+        "orders_db"
+      ],
+      "affectedEdgeIds": [
+        "e-api-db"
+      ],
+      "hint": "How long does a completed delivery need the customer's address?"
+    },
+    {
+      "key": "courier-pii",
+      "title": "Couriers see more customer data than the job needs",
+      "description": "Nothing limits the courier's view to what is needed for the drop-off at the time of the drop-off.",
+      "affectedNodeIds": [
+        "courier",
+        "orders_api"
+      ],
+      "affectedEdgeIds": [
+        "e-courier-loc"
+      ],
+      "hint": "Does a courier need the customer's phone number a week later?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "idor",
+      "title": "Insecure direct object reference on orders",
+      "description": "An attacker increments or guesses order identifiers and reads other customers' addresses, phone numbers and order history.",
+      "category": "Information disclosure",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "orders_api",
+        "orders_db"
+      ],
+      "affectedEdgeIds": [
+        "e-cust-api"
+      ],
+      "acceptedAliases": [
+        "IDOR",
+        "broken access control",
+        "enumerate order ids",
+        "reading other users orders",
+        "BOLA"
+      ],
+      "learnerExplanation": "Broken object-level authorization is the most common serious API flaw."
+    },
+    {
+      "key": "stalking",
+      "title": "Courier location stream abused to track a person",
+      "description": "Without scoping, a client can subscribe to a courier's position feed and follow their movements throughout the day.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "location"
+      ],
+      "affectedEdgeIds": [
+        "e-loc-cust"
+      ],
+      "acceptedAliases": [
+        "tracking courier",
+        "location leak",
+        "stalking",
+        "unauthorised location access",
+        "following a rider"
+      ],
+      "learnerExplanation": "Location data is safety-critical, not just private."
+    },
+    {
+      "key": "address-harvest",
+      "title": "Bulk harvesting of customer home addresses",
+      "description": "An indefinitely retained address book of customers is a high-value target and grows more damaging over time.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "orders_db"
+      ],
+      "affectedEdgeIds": [
+        "e-api-db"
+      ],
+      "acceptedAliases": [
+        "address leak",
+        "PII breach",
+        "customer data dump",
+        "home addresses exposed"
+      ],
+      "learnerExplanation": "Data you no longer need is pure liability."
+    },
+    {
+      "key": "fake-courier",
+      "title": "Fake courier accepts jobs to obtain addresses",
+      "description": "With weak courier onboarding, an attacker signs up, accepts orders and collects real delivery addresses without ever delivering.",
+      "category": "Spoofing",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "courier",
+        "orders_api"
+      ],
+      "affectedEdgeIds": [
+        "e-courier-loc"
+      ],
+      "acceptedAliases": [
+        "rogue courier",
+        "fake driver",
+        "courier impersonation",
+        "malicious rider"
+      ],
+      "learnerExplanation": "Marketplace platforms must threat-model their own supply side."
+    },
+    {
+      "key": "price-tamper",
+      "title": "Client-side order total accepted by the server",
+      "description": "If the order total is taken from the client rather than recomputed, a modified request pays less than the basket is worth.",
+      "category": "Tampering",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "orders_api",
+        "payments"
+      ],
+      "affectedEdgeIds": [
+        "e-cust-api",
+        "e-api-pay"
+      ],
+      "acceptedAliases": [
+        "price manipulation",
+        "changing the total",
+        "client side validation",
+        "modifying the amount"
+      ],
+      "learnerExplanation": "Never trust a price the client sends you."
+    }
+  ],
+  "mitigations": [
+    {
+      "key": "object-authz",
+      "title": "Object-level authorization on every order read",
+      "description": "Check on each request that the caller is the customer, assigned courier or restaurant for that specific order."
+    },
+    {
+      "key": "scoped-location",
+      "title": "Scope location streams to the active delivery",
+      "description": "Bind the subscription to an order, and end it when the delivery completes."
+    },
+    {
+      "key": "retention-policy",
+      "title": "Automatic deletion of addresses after delivery",
+      "description": "Purge or anonymise delivery addresses and phone numbers once the order is closed and the dispute window has passed."
+    },
+    {
+      "key": "courier-verification",
+      "title": "Identity verification during courier onboarding",
+      "description": "Verify identity documents and right to work before a courier can accept live jobs."
+    },
+    {
+      "key": "server-side-pricing",
+      "title": "Recompute every total server-side",
+      "description": "Derive the amount from the basket in the database and ignore any total supplied by the client."
+    },
+    {
+      "key": "https-everywhere",
+      "title": "Serve all traffic over HTTPS",
+      "description": "A baseline already satisfied here; it does not address any of the authorization gaps."
+    },
+    {
+      "key": "rate-limit-login",
+      "title": "Rate limit the login endpoint",
+      "description": "Useful against credential stuffing but unrelated to the flaws in this design."
+    }
+  ],
+  "threatMitigations": [
+    {
+      "threatKey": "idor",
+      "mitigationKey": "object-authz",
+      "isPrimary": true,
+      "explanation": "Per-object checks stop a valid session reading someone else's order."
+    },
+    {
+      "threatKey": "stalking",
+      "mitigationKey": "scoped-location",
+      "isPrimary": true,
+      "explanation": "A subscription tied to an active order cannot be used for general tracking."
+    },
+    {
+      "threatKey": "address-harvest",
+      "mitigationKey": "retention-policy",
+      "isPrimary": true,
+      "explanation": "Data that has been deleted cannot be harvested."
+    },
+    {
+      "threatKey": "fake-courier",
+      "mitigationKey": "courier-verification",
+      "isPrimary": true,
+      "explanation": "Identity checks raise the cost of signing up purely to collect addresses."
+    },
+    {
+      "threatKey": "price-tamper",
+      "mitigationKey": "server-side-pricing",
+      "isPrimary": true,
+      "explanation": "A server-derived total makes the client's number irrelevant."
+    }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "do_not_ship",
+    "rationale": "The order authorization gap is exploitable by any signed-up customer with a browser and exposes every other customer's home address and phone number — the platform's most sensitive data. The location scoping gap turns the product into a tracking tool for couriers. Both are core to how the platform works rather than edge cases, and both would be reportable data breaches on day one. 'Ship with conditions' is only reasonable if the launch is a closed pilot with staff accounts.",
+    "suggestedConditions": [
+      "Enforce object-level authorization on every order read before any public launch.",
+      "Scope courier location subscriptions to the active delivery.",
+      "Define and implement an address retention limit.",
+      "Verify courier identity during onboarding.",
+      "Recompute all order totals server-side."
+    ]
+  }
+}

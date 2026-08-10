@@ -1,0 +1,452 @@
+{
+  "category": {
+    "name": "AI Security",
+    "slug": "ai-security",
+    "description": "Threat modeling for LLM and ML systems: prompt injection, data exfiltration, tool abuse and training-data risk.",
+    "sortOrder": 2
+  },
+  "lab": {
+    "title": "Customer Support AI Agent",
+    "slug": "support-agent",
+    "summary": "An LLM agent that answers customer questions and can act on their account through internal tools.",
+    "businessContext": "A SaaS company is deploying an AI support agent that can read documentation and take account actions on the customer's behalf.",
+    "systemContext": "A chat widget reaches an agent service, which retrieves from a document index, calls an LLM provider, and invokes internal tools that read and modify customer accounts.",
+    "difficulty": "advanced",
+    "estimatedMinutes": 45,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "user",
+        "type": "external_entity",
+        "label": "Customer",
+        "description": "Chats with the support agent",
+        "trustBoundary": "internet",
+        "assets": [
+          "question",
+          "account_id"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "agent",
+        "type": "service",
+        "label": "Agent Service",
+        "description": "Orchestrates retrieval, model calls and tool use",
+        "trustBoundary": "platform",
+        "assets": [
+          "conversation"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "index",
+        "type": "data_store",
+        "label": "Document Index",
+        "description": "Embedded help articles and internal runbooks",
+        "trustBoundary": "platform",
+        "assets": [
+          "documentation"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "llm",
+        "type": "third_party",
+        "label": "LLM Provider",
+        "description": "Hosted model API",
+        "trustBoundary": "internet",
+        "assets": [
+          "prompt",
+          "completion"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "tools",
+        "type": "service",
+        "label": "Account Tools",
+        "description": "Reads and modifies customer accounts",
+        "trustBoundary": "platform",
+        "assets": [
+          "account_data"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "accounts_db",
+        "type": "data_store",
+        "label": "Accounts Database",
+        "description": "All customer accounts and billing",
+        "trustBoundary": "platform",
+        "assets": [
+          "account_data",
+          "billing"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "tickets",
+        "type": "data_store",
+        "label": "Ticket History",
+        "description": "Past conversations used as context",
+        "trustBoundary": "platform",
+        "assets": [
+          "conversation_history"
+        ],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-user-agent",
+        "source": "user",
+        "target": "agent",
+        "label": "Ask question",
+        "protocol": "HTTPS",
+        "data": [
+          "question"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-agent-index",
+        "source": "agent",
+        "target": "index",
+        "label": "Retrieve context",
+        "protocol": "TLS",
+        "data": [
+          "documentation"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-agent-tickets",
+        "source": "agent",
+        "target": "tickets",
+        "label": "Load history",
+        "protocol": "TLS",
+        "data": [
+          "conversation_history"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-agent-llm",
+        "source": "agent",
+        "target": "llm",
+        "label": "Prompt with context",
+        "protocol": "HTTPS",
+        "data": [
+          "prompt"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-llm-agent",
+        "source": "llm",
+        "target": "agent",
+        "label": "Completion with tool calls",
+        "protocol": "HTTPS",
+        "data": [
+          "completion"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-agent-tools",
+        "source": "agent",
+        "target": "tools",
+        "label": "Invoke tool",
+        "protocol": "HTTP",
+        "data": [
+          "account_id",
+          "action"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-tools-db",
+        "source": "tools",
+        "target": "accounts_db",
+        "label": "Read / write account",
+        "protocol": "TLS",
+        "data": [
+          "account_data"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      {
+        "id": "internet",
+        "label": "Internet",
+        "description": "Untrusted public network"
+      },
+      {
+        "id": "platform",
+        "label": "Platform",
+        "description": "Internal services and data"
+      }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "model-decides-authz",
+      "title": "The model chooses which account a tool acts on",
+      "description": "Tool calls carry an account identifier produced by the model rather than one bound to the authenticated session.",
+      "affectedNodeIds": [
+        "agent",
+        "tools"
+      ],
+      "affectedEdgeIds": [
+        "e-agent-tools"
+      ],
+      "hint": "Where does the account id in the tool call actually come from?"
+    },
+    {
+      "key": "mixed-context",
+      "title": "Untrusted user text and trusted runbooks share one prompt",
+      "description": "Retrieved internal documents and the customer's own message are concatenated with no delimitation or trust marking.",
+      "affectedNodeIds": [
+        "agent",
+        "index"
+      ],
+      "affectedEdgeIds": [
+        "e-agent-llm"
+      ],
+      "hint": "How does the model know which part of its input is an instruction?"
+    },
+    {
+      "key": "internal-docs-indexed",
+      "title": "Internal runbooks sit in the same index as public help articles",
+      "description": "The retrieval index mixes customer-facing documentation with internal procedures and no audience filter is described.",
+      "affectedNodeIds": [
+        "index"
+      ],
+      "affectedEdgeIds": [
+        "e-agent-index"
+      ],
+      "hint": "What is the worst thing retrieval could surface into a customer's chat?"
+    },
+    {
+      "key": "no-tool-limits",
+      "title": "Tools have no described scope or rate limit",
+      "description": "Nothing constrains which actions the agent may take, how often, or which are irreversible.",
+      "affectedNodeIds": [
+        "tools",
+        "accounts_db"
+      ],
+      "affectedEdgeIds": [
+        "e-tools-db"
+      ],
+      "hint": "Should an agent be able to issue a thousand refunds?"
+    },
+    {
+      "key": "history-crosstalk",
+      "title": "Ticket history loaded without tenant scoping",
+      "description": "Past conversations are retrieved as context with no stated restriction to the current customer.",
+      "affectedNodeIds": [
+        "tickets",
+        "agent"
+      ],
+      "affectedEdgeIds": [
+        "e-agent-tickets"
+      ],
+      "hint": "Whose previous conversations end up in this prompt?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "prompt-injection-tools",
+      "title": "Prompt injection escalates into unauthorised account actions",
+      "description": "A customer instructs the model to act on a different account. Because the tool call takes its account id from the model's output, the instruction becomes a real privileged action.",
+      "category": "Elevation of privilege",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "agent",
+        "tools"
+      ],
+      "affectedEdgeIds": [
+        "e-agent-tools"
+      ],
+      "acceptedAliases": [
+        "prompt injection",
+        "jailbreak leads to tool abuse",
+        "confused deputy",
+        "model tricked into calling tools",
+        "instruction injection"
+      ],
+      "learnerExplanation": "Prompt injection is only as dangerous as the permissions behind the model."
+    },
+    {
+      "key": "internal-doc-leak",
+      "title": "Internal runbooks surfaced to a customer",
+      "description": "Retrieval pulls an internal procedure into the answer, disclosing internal processes, thresholds or credentials to an outsider.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "index"
+      ],
+      "affectedEdgeIds": [
+        "e-agent-index"
+      ],
+      "acceptedAliases": [
+        "RAG leak",
+        "internal docs exposed",
+        "retrieval leaks confidential content",
+        "index leakage"
+      ],
+      "learnerExplanation": "Everything in the index is reachable by anyone who can phrase the right question."
+    },
+    {
+      "key": "tenant-crosstalk",
+      "title": "Another customer's conversation appears as context",
+      "description": "Unscoped history retrieval leaks one customer's support conversation, and its personal data, into another's chat.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "tickets"
+      ],
+      "affectedEdgeIds": [
+        "e-agent-tickets"
+      ],
+      "acceptedAliases": [
+        "tenant isolation",
+        "cross customer leak",
+        "wrong conversation history",
+        "multi tenancy failure"
+      ],
+      "learnerExplanation": "Multi-tenant retrieval needs the tenant filter in the query, not in the prompt."
+    },
+    {
+      "key": "data-to-provider",
+      "title": "Customer personal data sent to a third-party model provider",
+      "description": "Full account context and conversation history leave the platform on every call, with no stated minimisation or retention agreement.",
+      "category": "Information disclosure",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "llm"
+      ],
+      "affectedEdgeIds": [
+        "e-agent-llm"
+      ],
+      "acceptedAliases": [
+        "third party model sees PII",
+        "data leaves the platform",
+        "no minimisation before LLM",
+        "provider retention"
+      ],
+      "learnerExplanation": "The provider boundary is a real trust boundary."
+    },
+    {
+      "key": "tool-abuse-cost",
+      "title": "Unbounded tool invocation causes financial or operational damage",
+      "description": "With no rate limit or human gate on irreversible actions, a manipulated agent can issue mass refunds or bulk changes.",
+      "category": "Denial of service",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "tools"
+      ],
+      "affectedEdgeIds": [
+        "e-tools-db"
+      ],
+      "acceptedAliases": [
+        "mass refunds",
+        "runaway agent",
+        "no rate limit on tools",
+        "irreversible actions"
+      ],
+      "learnerExplanation": "Agents act at machine speed; blast radius matters more than intent."
+    }
+  ],
+  "mitigations": [
+    {
+      "key": "session-bound-tools",
+      "title": "Bind every tool call to the authenticated session",
+      "description": "Take the account id from the server-side session, never from model output, and reject any tool call that names a different account."
+    },
+    {
+      "key": "audience-filter",
+      "title": "Audience-scoped retrieval index",
+      "description": "Tag every document with its audience and filter to customer-visible content before retrieval."
+    },
+    {
+      "key": "tenant-scoped-retrieval",
+      "title": "Tenant filter applied in the retrieval query",
+      "description": "Constrain history and index lookups by tenant at the query layer so cross-tenant results cannot be returned."
+    },
+    {
+      "key": "minimise-to-provider",
+      "title": "Minimise and redact before calling the provider",
+      "description": "Strip identifiers not needed for the answer and contract for zero retention."
+    },
+    {
+      "key": "tool-gates",
+      "title": "Scoped tools with rate limits and human approval",
+      "description": "Allow-list actions, cap frequency, and require human confirmation for anything irreversible."
+    },
+    {
+      "key": "system-prompt-hardening",
+      "title": "Add 'ignore malicious instructions' to the system prompt",
+      "description": "A worthwhile layer, but prompt text alone cannot be relied on to stop injection reaching a privileged tool."
+    },
+    {
+      "key": "output-filter",
+      "title": "Profanity filter on model output",
+      "description": "Improves tone; irrelevant to every threat in this system."
+    }
+  ],
+  "threatMitigations": [
+    {
+      "threatKey": "prompt-injection-tools",
+      "mitigationKey": "session-bound-tools",
+      "isPrimary": true,
+      "explanation": "If the account is fixed by the session, a successful injection still cannot reach another customer."
+    },
+    {
+      "threatKey": "internal-doc-leak",
+      "mitigationKey": "audience-filter",
+      "isPrimary": true,
+      "explanation": "Content that is never retrieved cannot be surfaced by any prompt."
+    },
+    {
+      "threatKey": "tenant-crosstalk",
+      "mitigationKey": "tenant-scoped-retrieval",
+      "isPrimary": true,
+      "explanation": "Filtering at the query layer makes cross-tenant results structurally impossible."
+    },
+    {
+      "threatKey": "data-to-provider",
+      "mitigationKey": "minimise-to-provider",
+      "isPrimary": true,
+      "explanation": "Data that never leaves cannot be retained or exposed by the provider."
+    },
+    {
+      "threatKey": "tool-abuse-cost",
+      "mitigationKey": "tool-gates",
+      "isPrimary": true,
+      "explanation": "Scope, rate limits and human gates bound the damage a manipulated agent can do."
+    }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "do_not_ship",
+    "rationale": "The critical finding is architectural: the agent takes the account identifier for privileged tool calls from model output, which turns any successful prompt injection into a real action on someone else's account. Prompt injection is not reliably preventable, so the correct posture is to assume it succeeds and ensure it cannot reach authority — which this design does not. Hardening the system prompt is not a fix. Combined with unscoped retrieval leaking internal runbooks and other tenants' conversations, this is not a launchable configuration. A read-only agent with no tools would be shippable with conditions.",
+    "suggestedConditions": [
+      "Bind all tool calls to the authenticated session; never accept an account id from the model.",
+      "Apply tenant and audience filters at the retrieval query layer.",
+      "Separate internal runbooks from the customer-facing index.",
+      "Minimise and redact data before it reaches the model provider.",
+      "Add rate limits and human approval for irreversible actions."
+    ]
+  }
+}

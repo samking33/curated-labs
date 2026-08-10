@@ -1,0 +1,607 @@
+// PROJECT.md §10. Table names, indexes and constraints are preserved exactly
+// via @@map / @map — the spec's SQL is the contract, this is the translation.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  // Migrations bypass the connection pooler: Prisma takes an advisory lock that
+  // a pooled connection cannot hold. Falls back to DATABASE_URL when unset, so
+  // a plain local Postgres needs no second variable.
+  directUrl  = env("DIRECT_URL")
+  extensions = [citext, pgcrypto, pg_trgm]
+}
+
+enum AccountKind {
+  individual
+  organization
+
+  @@map("account_kind")
+}
+
+enum OrgRole {
+  org_owner
+  org_admin
+  department_manager
+  learner
+
+  @@map("org_role")
+}
+
+enum PlatformRole {
+  platform_owner
+  platform_content_manager
+
+  @@map("platform_role")
+}
+
+enum LabStatus {
+  draft
+  review
+  published
+  archived
+
+  @@map("lab_status")
+}
+
+enum LabDifficulty {
+  beginner
+  intermediate
+  advanced
+
+  @@map("lab_difficulty")
+}
+
+enum AttemptStatus {
+  in_progress
+  completed
+  abandoned
+
+  @@map("attempt_status")
+}
+
+enum LabStep {
+  intro
+  architecture_issues
+  threats
+  prioritization
+  mitigations
+  release_decision
+  completed
+
+  @@map("lab_step")
+}
+
+enum PriorityLevel {
+  critical
+  high
+  medium
+  low
+
+  @@map("priority_level")
+}
+
+enum ReleaseDecision {
+  ship_it
+  ship_with_conditions
+  do_not_ship
+
+  @@map("release_decision")
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  revoked
+  expired
+
+  @@map("invitation_status")
+}
+
+enum AiTaskType {
+  architecture_feedback
+  threat_matching
+  priority_feedback
+  mitigation_feedback
+  release_feedback
+  model_smoke_test
+
+  @@map("ai_task_type")
+}
+
+enum PointReason {
+  architecture_submitted
+  threat_matched
+  threats_clean_sweep
+  priority_correct
+  mitigation_correct
+  release_submitted
+  lab_completed
+
+  @@map("point_reason")
+}
+
+model User {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String       @unique @db.Citext
+  name          String
+  avatarUrl     String?      @map("avatar_url")
+  googleSubject String       @unique @map("google_subject")
+  emailVerified Boolean      @default(false) @map("email_verified")
+  accountKind   AccountKind? @map("account_kind")
+  lastLoginAt   DateTime?    @map("last_login_at") @db.Timestamptz(6)
+  disabledAt    DateTime?    @map("disabled_at") @db.Timestamptz(6)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  platformRoles       UserPlatformRole[]
+  ownedOrganizations  Organization[]           @relation("OrganizationOwner")
+  memberships         OrganizationMembership[]
+  departmentMembers   DepartmentMembership[]
+  invitationsSent     Invitation[]             @relation("InvitedBy")
+  invitationsAccepted Invitation[]             @relation("AcceptedBy")
+  attempts            LabAttempt[]
+  sessions            Session[]
+  auditLogs           AuditLog[]
+  pointEvents         PointEvent[]
+
+  @@index([email], map: "idx_users_email")
+  @@map("users")
+}
+
+/// Server-side sessions (§12). Stored in Postgres so revocation survives a
+/// Redis flush; Redis fronts this as a cache in the session service.
+model Session {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  csrfTokenHash  String    @map("csrf_token_hash")
+  ipAddress      String?   @map("ip_address") @db.Inet
+  userAgent      String?   @map("user_agent")
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  absoluteExpiry DateTime  @map("absolute_expiry") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_sessions_user")
+  @@map("sessions")
+}
+
+model UserPlatformRole {
+  userId    String       @map("user_id") @db.Uuid
+  role      PlatformRole
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, role])
+  @@map("user_platform_roles")
+}
+
+model Organization {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  slug        String    @unique
+  ownerUserId String?   @map("owner_user_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  owner       User?                    @relation("OrganizationOwner", fields: [ownerUserId], references: [id])
+  departments Department[]
+  memberships OrganizationMembership[]
+  invitations Invitation[]
+  attempts    LabAttempt[]
+  auditLogs   AuditLog[]
+  pointEvents PointEvent[]
+
+  @@index([slug], map: "idx_organizations_slug")
+  @@map("organizations")
+}
+
+model Department {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  parentDepartmentId String?   @map("parent_department_id") @db.Uuid
+  name               String
+  slug               String
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       Department?            @relation("DepartmentTree", fields: [parentDepartmentId], references: [id], onDelete: SetNull)
+  children     Department[]           @relation("DepartmentTree")
+  members      DepartmentMembership[]
+  invitations  Invitation[]
+  attempts     LabAttempt[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId], map: "idx_departments_org")
+  @@map("departments")
+}
+
+model OrganizationMembership {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  role           OrgRole   @default(learner)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, role], map: "idx_org_memberships_org_role")
+  @@index([userId], map: "idx_org_memberships_user")
+  @@map("organization_memberships")
+}
+
+model DepartmentMembership {
+  departmentId String   @map("department_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  isManager    Boolean  @default(false) @map("is_manager")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([departmentId, userId])
+  @@index([userId], map: "idx_department_memberships_user")
+  @@map("department_memberships")
+}
+
+model Invitation {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String           @map("organization_id") @db.Uuid
+  departmentId     String?          @map("department_id") @db.Uuid
+  email            String           @db.Citext
+  role             OrgRole          @default(learner)
+  tokenHash        String           @unique @map("token_hash")
+  status           InvitationStatus @default(pending)
+  invitedByUserId  String           @map("invited_by_user_id") @db.Uuid
+  acceptedByUserId String?          @map("accepted_by_user_id") @db.Uuid
+  expiresAt        DateTime         @map("expires_at") @db.Timestamptz(6)
+  acceptedAt       DateTime?        @map("accepted_at") @db.Timestamptz(6)
+  revokedAt        DateTime?        @map("revoked_at") @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  invitedBy    User         @relation("InvitedBy", fields: [invitedByUserId], references: [id])
+  acceptedBy   User?        @relation("AcceptedBy", fields: [acceptedByUserId], references: [id])
+
+  @@index([email, status], map: "idx_invitations_email_status")
+  @@index([organizationId], map: "idx_invitations_org")
+  @@map("invitations")
+}
+
+model LabCategory {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  labs Lab[]
+
+  @@map("lab_categories")
+}
+
+/// Published labs are immutable (§10). Changes create a new row sharing the
+/// slug with an incremented version, so in-flight attempts keep their content.
+model Lab {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  categoryId       String        @map("category_id") @db.Uuid
+  title            String
+  slug             String
+  summary          String
+  businessContext  String        @map("business_context")
+  systemContext    String        @map("system_context")
+  difficulty       LabDifficulty
+  estimatedMinutes Int           @map("estimated_minutes")
+  status           LabStatus     @default(draft)
+  version          Int           @default(1)
+  contentHash      String        @map("content_hash")
+  supersedesLabId  String?       @map("supersedes_lab_id") @db.Uuid
+  publishedAt      DateTime?     @map("published_at") @db.Timestamptz(6)
+  createdByUserId  String?       @map("created_by_user_id") @db.Uuid
+  updatedByUserId  String?       @map("updated_by_user_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category           LabCategory            @relation(fields: [categoryId], references: [id])
+  supersedes         Lab?                   @relation("LabVersions", fields: [supersedesLabId], references: [id])
+  supersededBy       Lab[]                  @relation("LabVersions")
+  dfds               LabDfd[]
+  architectureIssues LabArchitectureIssue[]
+  threats            LabThreat[]
+  mitigations        LabMitigation[]
+  releaseGuidance    LabReleaseGuidance?
+  attempts           LabAttempt[]
+
+  @@unique([slug, version])
+  @@index([categoryId, status], map: "idx_labs_category_status")
+  @@index([status], map: "idx_labs_status")
+  @@index([slug], map: "idx_labs_slug")
+  @@map("labs")
+}
+
+model LabDfd {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labId           String   @map("lab_id") @db.Uuid
+  version         Int      @default(1)
+  graphJson       Json     @map("graph_json")
+  previewAssetUrl String?  @map("preview_asset_url")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lab Lab @relation(fields: [labId], references: [id], onDelete: Cascade)
+
+  @@unique([labId, version])
+  @@index([labId], map: "idx_lab_dfds_lab")
+  @@map("lab_dfds")
+}
+
+model LabArchitectureIssue {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labId           String   @map("lab_id") @db.Uuid
+  title           String
+  description     String
+  affectedNodeIds String[] @default([]) @map("affected_node_ids")
+  affectedEdgeIds String[] @default([]) @map("affected_edge_ids")
+  hint            String?
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lab Lab @relation(fields: [labId], references: [id], onDelete: Cascade)
+
+  @@index([labId], map: "idx_lab_architecture_issues_lab")
+  @@map("lab_architecture_issues")
+}
+
+model LabThreat {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labId              String        @map("lab_id") @db.Uuid
+  title              String
+  description        String
+  category           String
+  expectedPriority   PriorityLevel @map("expected_priority")
+  affectedNodeIds    String[]      @default([]) @map("affected_node_ids")
+  affectedEdgeIds    String[]      @default([]) @map("affected_edge_ids")
+  acceptedAliases    String[]      @default([]) @map("accepted_aliases")
+  learnerExplanation String?       @map("learner_explanation")
+  sortOrder          Int           @default(0) @map("sort_order")
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lab         Lab                   @relation(fields: [labId], references: [id], onDelete: Cascade)
+  mitigations LabThreatMitigation[]
+  matches     LearnerThreatMatch[]
+
+  @@index([labId], map: "idx_lab_threats_lab")
+  @@index([category], map: "idx_lab_threats_category")
+  @@map("lab_threats")
+}
+
+model LabMitigation {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labId       String   @map("lab_id") @db.Uuid
+  title       String
+  description String
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  lab     Lab                   @relation(fields: [labId], references: [id], onDelete: Cascade)
+  threats LabThreatMitigation[]
+
+  @@map("lab_mitigations")
+}
+
+model LabThreatMitigation {
+  threatId     String  @map("threat_id") @db.Uuid
+  mitigationId String  @map("mitigation_id") @db.Uuid
+  isPrimary    Boolean @default(true) @map("is_primary")
+  explanation  String?
+
+  threat     LabThreat     @relation(fields: [threatId], references: [id], onDelete: Cascade)
+  mitigation LabMitigation @relation(fields: [mitigationId], references: [id], onDelete: Cascade)
+
+  @@id([threatId, mitigationId])
+  @@map("lab_threat_mitigations")
+}
+
+/// §8 step 5 reference answer. Never sent to the browser.
+model LabReleaseGuidance {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labId               String          @unique @map("lab_id") @db.Uuid
+  recommendedDecision ReleaseDecision @map("recommended_decision")
+  rationale           String
+  suggestedConditions String[]        @default([]) @map("suggested_conditions")
+
+  lab Lab @relation(fields: [labId], references: [id], onDelete: Cascade)
+
+  @@map("lab_release_guidance")
+}
+
+model LabAttempt {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labId          String        @map("lab_id") @db.Uuid
+  labVersion     Int           @map("lab_version")
+  labContentHash String        @map("lab_content_hash")
+  dfdVersion     Int           @map("dfd_version")
+  userId         String        @map("user_id") @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  departmentId   String?       @map("department_id") @db.Uuid
+  status         AttemptStatus @default(in_progress)
+  currentStep    LabStep       @default(intro) @map("current_step")
+  startedAt      DateTime      @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt    DateTime?     @map("completed_at") @db.Timestamptz(6)
+  abandonedAt    DateTime?     @map("abandoned_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lab             Lab                     @relation(fields: [labId], references: [id])
+  user            User                    @relation(fields: [userId], references: [id])
+  organization    Organization?           @relation(fields: [organizationId], references: [id])
+  department      Department?             @relation(fields: [departmentId], references: [id])
+  submissions     LabStepSubmission[]
+  releaseDecision LearnerReleaseDecision?
+  pointEvents     PointEvent[]
+
+  @@index([userId], map: "idx_lab_attempts_user")
+  @@index([labId, userId], map: "idx_lab_attempts_lab_user")
+  @@index([organizationId], map: "idx_lab_attempts_org")
+  @@index([departmentId], map: "idx_lab_attempts_department")
+  @@map("lab_attempts")
+}
+
+model LabStepSubmission {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attemptId               String   @map("attempt_id") @db.Uuid
+  step                    LabStep
+  attemptNumber           Int      @default(1) @map("attempt_number")
+  answerJson              Json     @map("answer_json")
+  aiFeedbackJson          Json?    @map("ai_feedback_json")
+  deterministicResultJson Json?    @map("deterministic_result_json")
+  /// §25 idempotency: a retried submit returns the original row instead of
+  /// duplicating an answer and burning another AI call.
+  idempotencyKey          String?  @map("idempotency_key")
+  submittedAt             DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  attempt LabAttempt           @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  matches LearnerThreatMatch[]
+
+  @@unique([attemptId, idempotencyKey])
+  @@index([attemptId, step], map: "idx_lab_step_submissions_attempt_step")
+  @@map("lab_step_submissions")
+}
+
+model LearnerThreatMatch {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionId      String   @map("submission_id") @db.Uuid
+  canonicalThreatId String?  @map("canonical_threat_id") @db.Uuid
+  learnerText       String   @map("learner_text")
+  matchConfidence   Decimal? @map("match_confidence") @db.Decimal(4, 3)
+  matchReason       String?  @map("match_reason")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  submission LabStepSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  threat     LabThreat?        @relation(fields: [canonicalThreatId], references: [id], onDelete: SetNull)
+
+  @@map("learner_threat_matches")
+}
+
+model LearnerReleaseDecision {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attemptId      String          @unique @map("attempt_id") @db.Uuid
+  decision       ReleaseDecision
+  rationale      String
+  conditions     String?
+  aiFeedbackJson Json?           @map("ai_feedback_json")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  attempt LabAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@map("learner_release_decisions")
+}
+
+model AiModelRegistry {
+  id                 String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider           String      @default("nvidia_nim")
+  modelId            String      @map("model_id")
+  taskType           AiTaskType? @map("task_type")
+  isAvailable        Boolean     @default(true) @map("is_available")
+  supportsJson       Boolean     @default(false) @map("supports_json")
+  supportsTools      Boolean     @default(false) @map("supports_tools")
+  supportsEmbeddings Boolean     @default(false) @map("supports_embeddings")
+  contextWindow      Int?        @map("context_window")
+  latencyMsP50       Int?        @map("latency_ms_p50")
+  latencyMsP95       Int?        @map("latency_ms_p95")
+  lastCheckedAt      DateTime    @default(now()) @map("last_checked_at") @db.Timestamptz(6)
+  metadataJson       Json        @default("{}") @map("metadata_json")
+
+  @@unique([provider, modelId, taskType])
+  @@map("ai_model_registry")
+}
+
+model AiCall {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskType         AiTaskType @map("task_type")
+  provider         String     @default("nvidia_nim")
+  modelId          String     @map("model_id")
+  requestHash      String     @unique(map: "idx_ai_calls_request_hash") @map("request_hash")
+  promptVersion    String     @map("prompt_version")
+  inputTokenCount  Int?       @map("input_token_count")
+  outputTokenCount Int?       @map("output_token_count")
+  latencyMs        Int?       @map("latency_ms")
+  status           String
+  errorCode        String?    @map("error_code")
+  safeMetadataJson Json       @default("{}") @map("safe_metadata_json")
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("ai_calls")
+}
+
+/// Points ledger, not a running counter (§ gamification, added on top of the
+/// original spec). An append-only log makes the total auditable and, more
+/// importantly, makes re-awarding impossible to do by accident: `refId` plus
+/// the unique constraint below means "this exact correct answer, in this
+/// exact attempt" can only ever insert once, so a retried idempotent
+/// submission — or a resubmitted step — can never double-count.
+model PointEvent {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String      @map("user_id") @db.Uuid
+  organizationId String?     @map("organization_id") @db.Uuid
+  attemptId      String      @map("attempt_id") @db.Uuid
+  reason         PointReason
+  amount         Int
+  /// What specifically earned it: a canonical threat id, a "threatId:mitigationId"
+  /// pair, or the literal "single" for flat per-step/per-lab awards. Part of
+  /// the dedupe key below — deliberately NOT nullable. Postgres treats every
+  /// NULL as distinct from every other NULL, so a nullable refId would make
+  /// the unique constraint silently no-op for exactly the flat-award case
+  /// (architecture_submitted, release_submitted, lab_completed) that most
+  /// needs protecting from a resubmitted step awarding twice.
+  refId          String      @map("ref_id")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  attempt      LabAttempt    @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, reason, refId])
+  @@index([userId], map: "idx_point_events_user")
+  @@index([organizationId], map: "idx_point_events_org")
+  @@map("point_events")
+}
+
+model AuditLog {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  action         String
+  targetType     String   @map("target_type")
+  targetId       String?  @map("target_id") @db.Uuid
+  ipAddress      String?  @map("ip_address") @db.Inet
+  userAgent      String?  @map("user_agent")
+  metadataJson   Json     @default("{}") @map("metadata_json")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor        User?         @relation(fields: [actorUserId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([actorUserId], map: "idx_audit_logs_actor")
+  @@index([organizationId, createdAt(sort: Desc)], map: "idx_audit_logs_org_created")
+  @@map("audit_logs")
+}

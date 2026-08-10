@@ -1,0 +1,452 @@
+{
+  "category": {
+    "name": "App Security",
+    "slug": "app-security",
+    "description": "Application-layer threat modeling: authentication, sessions, data handling and third-party integrations.",
+    "sortOrder": 0
+  },
+  "lab": {
+    "title": "Retail Banking Transfers",
+    "slug": "banking-transfers",
+    "summary": "A money-movement flow where a mobile app initiates transfers through a core banking system.",
+    "businessContext": "A retail bank is launching in-app transfers between customer accounts and to external payees.",
+    "systemContext": "A mobile client talks to an API gateway, which reaches an auth service, a transfers service, a core ledger and an external payments rail.",
+    "difficulty": "intermediate",
+    "estimatedMinutes": 40,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "mobile",
+        "type": "external_entity",
+        "label": "Mobile App",
+        "description": "Customer's banking app",
+        "trustBoundary": "internet",
+        "assets": [
+          "credentials",
+          "device_id",
+          "otp"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "gateway",
+        "type": "process",
+        "label": "API Gateway",
+        "description": "Public entry point for all mobile traffic",
+        "trustBoundary": "edge",
+        "assets": [
+          "access_token"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "auth",
+        "type": "service",
+        "label": "Auth Service",
+        "description": "Issues and validates access tokens",
+        "trustBoundary": "core",
+        "assets": [
+          "password_hash",
+          "otp_secret"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "transfers",
+        "type": "service",
+        "label": "Transfers Service",
+        "description": "Validates and executes transfer requests",
+        "trustBoundary": "core",
+        "assets": [
+          "transfer_instruction"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "ledger",
+        "type": "data_store",
+        "label": "Core Ledger",
+        "description": "Authoritative account balances",
+        "trustBoundary": "core",
+        "assets": [
+          "balance",
+          "account_number"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "rail",
+        "type": "third_party",
+        "label": "Payments Rail",
+        "description": "External interbank settlement network",
+        "trustBoundary": "internet",
+        "assets": [
+          "payee_details"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "audit_log",
+        "type": "data_store",
+        "label": "Audit Store",
+        "description": "Records transfer events",
+        "trustBoundary": "core",
+        "assets": [
+          "event_history"
+        ],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-mobile-gw",
+        "source": "mobile",
+        "target": "gateway",
+        "label": "Transfer request",
+        "protocol": "HTTPS",
+        "data": [
+          "access_token",
+          "amount",
+          "payee"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-gw-auth",
+        "source": "gateway",
+        "target": "auth",
+        "label": "Validate token",
+        "protocol": "HTTPS",
+        "data": [
+          "access_token"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-gw-transfers",
+        "source": "gateway",
+        "target": "transfers",
+        "label": "Execute transfer",
+        "protocol": "HTTP",
+        "data": [
+          "transfer_instruction"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-transfers-ledger",
+        "source": "transfers",
+        "target": "ledger",
+        "label": "Debit / credit",
+        "protocol": "TLS/Postgres",
+        "data": [
+          "balance"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-transfers-rail",
+        "source": "transfers",
+        "target": "rail",
+        "label": "Settle externally",
+        "protocol": "HTTPS",
+        "data": [
+          "payee_details",
+          "amount"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-transfers-audit",
+        "source": "transfers",
+        "target": "audit_log",
+        "label": "Write event",
+        "protocol": "TLS",
+        "data": [
+          "event_history"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      {
+        "id": "internet",
+        "label": "Internet",
+        "description": "Untrusted public network"
+      },
+      {
+        "id": "edge",
+        "label": "Edge",
+        "description": "Public-facing DMZ"
+      },
+      {
+        "id": "core",
+        "label": "Core Banking",
+        "description": "Regulated internal network"
+      }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "no-step-up",
+      "title": "No step-up authentication for high-value transfers",
+      "description": "Every transfer is authorised by the same access token regardless of amount or payee novelty. A stolen token moves any sum.",
+      "affectedNodeIds": [
+        "auth",
+        "transfers"
+      ],
+      "affectedEdgeIds": [
+        "e-mobile-gw"
+      ],
+      "hint": "Does a £5 transfer to a saved payee deserve the same scrutiny as £50,000 to a new one?"
+    },
+    {
+      "key": "plaintext-internal",
+      "title": "Gateway to transfers hop is unencrypted",
+      "description": "Transfer instructions cross from the edge into the regulated core over plain HTTP.",
+      "affectedNodeIds": [
+        "gateway",
+        "transfers"
+      ],
+      "affectedEdgeIds": [
+        "e-gw-transfers"
+      ],
+      "hint": "Compare this protocol with the one used to reach the ledger."
+    },
+    {
+      "key": "no-idempotency",
+      "title": "No idempotency on transfer execution",
+      "description": "A retried or replayed request has nothing to deduplicate against, so the same instruction can debit an account twice.",
+      "affectedNodeIds": [
+        "transfers",
+        "ledger"
+      ],
+      "affectedEdgeIds": [
+        "e-gw-transfers"
+      ],
+      "hint": "What happens if the mobile app times out and the customer taps again?"
+    },
+    {
+      "key": "audit-same-store",
+      "title": "Audit events are writable by the service that creates them",
+      "description": "The transfers service writes its own audit trail with no append-only guarantee, so a compromise can erase its own tracks.",
+      "affectedNodeIds": [
+        "audit_log",
+        "transfers"
+      ],
+      "affectedEdgeIds": [
+        "e-transfers-audit"
+      ],
+      "hint": "Who can edit the record of what happened?"
+    },
+    {
+      "key": "no-payee-validation",
+      "title": "No described validation of external payee details",
+      "description": "Payee account details flow to the external rail with no stated verification or confirmation-of-payee check.",
+      "affectedNodeIds": [
+        "transfers",
+        "rail"
+      ],
+      "affectedEdgeIds": [
+        "e-transfers-rail"
+      ],
+      "hint": "How would the customer know the money is going where they think?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "token-theft",
+      "title": "Stolen access token authorises unlimited transfers",
+      "description": "A token lifted from a compromised device or intercepted session can move any amount to any payee, because nothing re-authenticates the customer at the point of payment.",
+      "category": "Spoofing",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "auth",
+        "transfers"
+      ],
+      "affectedEdgeIds": [
+        "e-mobile-gw"
+      ],
+      "acceptedAliases": [
+        "stolen token",
+        "session hijack",
+        "account takeover",
+        "token replay",
+        "impersonation"
+      ],
+      "learnerExplanation": "Authentication at login is not authorisation at payment time."
+    },
+    {
+      "key": "double-debit",
+      "title": "Replayed transfer instruction debits twice",
+      "description": "Without an idempotency key a retried request executes the same debit again, creating real financial loss and a reconciliation problem.",
+      "category": "Tampering",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "transfers",
+        "ledger"
+      ],
+      "affectedEdgeIds": [
+        "e-gw-transfers"
+      ],
+      "acceptedAliases": [
+        "replay attack",
+        "duplicate transaction",
+        "double spend",
+        "retry causes double payment"
+      ],
+      "learnerExplanation": "In money movement, at-least-once delivery without idempotency means duplicate debits."
+    },
+    {
+      "key": "internal-intercept",
+      "title": "Interception of transfer instructions on the edge-to-core hop",
+      "description": "Plain HTTP across a trust boundary lets an attacker on that segment read balances and alter amounts or payees in flight.",
+      "category": "Tampering",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "gateway",
+        "transfers"
+      ],
+      "affectedEdgeIds": [
+        "e-gw-transfers"
+      ],
+      "acceptedAliases": [
+        "MITM",
+        "man in the middle",
+        "unencrypted internal traffic",
+        "tampering in transit"
+      ],
+      "learnerExplanation": "A boundary crossing without transport security is an interception point."
+    },
+    {
+      "key": "audit-tampering",
+      "title": "Attacker erases their own audit trail",
+      "description": "Because the transfers service can rewrite the audit store, a compromise of that service destroys the evidence needed to investigate it.",
+      "category": "Repudiation",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "audit_log"
+      ],
+      "affectedEdgeIds": [
+        "e-transfers-audit"
+      ],
+      "acceptedAliases": [
+        "log tampering",
+        "erasing evidence",
+        "no audit integrity",
+        "covering tracks"
+      ],
+      "learnerExplanation": "An audit log the attacker can edit is not an audit log."
+    },
+    {
+      "key": "apf",
+      "title": "Authorised push payment fraud to an attacker-controlled payee",
+      "description": "With no confirmation-of-payee, a socially engineered customer sends funds to an account that is not who they believe it is.",
+      "category": "Spoofing",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "rail",
+        "transfers"
+      ],
+      "affectedEdgeIds": [
+        "e-transfers-rail"
+      ],
+      "acceptedAliases": [
+        "APP fraud",
+        "payee spoofing",
+        "misdirected payment",
+        "social engineering transfer"
+      ],
+      "learnerExplanation": "Some fraud needs no technical compromise at all."
+    }
+  ],
+  "mitigations": [
+    {
+      "key": "step-up",
+      "title": "Step-up authentication on risk signals",
+      "description": "Require re-authentication or a second factor for high-value amounts, new payees and unusual devices."
+    },
+    {
+      "key": "mtls-core",
+      "title": "Mutual TLS on every trust boundary crossing",
+      "description": "Encrypt and mutually authenticate edge-to-core traffic so the segment cannot be read or altered."
+    },
+    {
+      "key": "idempotency-keys",
+      "title": "Idempotency keys on transfer execution",
+      "description": "Require a client-supplied key per instruction and store it, so a replay returns the original result instead of debiting again."
+    },
+    {
+      "key": "append-only-audit",
+      "title": "Append-only audit store with separate credentials",
+      "description": "Write audit events to storage the application cannot update or delete, under a different identity."
+    },
+    {
+      "key": "confirmation-of-payee",
+      "title": "Confirmation of payee before settlement",
+      "description": "Verify the payee name against the destination account and warn the customer on a mismatch."
+    },
+    {
+      "key": "tls-only",
+      "title": "Enable TLS on the public endpoint",
+      "description": "A baseline control that protects the internet-facing hop, already present here and not the gap."
+    },
+    {
+      "key": "captcha",
+      "title": "CAPTCHA on the login form",
+      "description": "Slows automated credential stuffing but does nothing about any of the design flaws in this flow."
+    }
+  ],
+  "threatMitigations": [
+    {
+      "threatKey": "token-theft",
+      "mitigationKey": "step-up",
+      "isPrimary": true,
+      "explanation": "Re-authenticating at payment time makes a stolen token insufficient on its own."
+    },
+    {
+      "threatKey": "double-debit",
+      "mitigationKey": "idempotency-keys",
+      "isPrimary": true,
+      "explanation": "A stored key makes the second execution a no-op that returns the first result."
+    },
+    {
+      "threatKey": "internal-intercept",
+      "mitigationKey": "mtls-core",
+      "isPrimary": true,
+      "explanation": "Encrypts and authenticates the hop, removing the interception point."
+    },
+    {
+      "threatKey": "audit-tampering",
+      "mitigationKey": "append-only-audit",
+      "isPrimary": true,
+      "explanation": "Separate credentials and append-only semantics stop a compromised service rewriting history."
+    },
+    {
+      "threatKey": "apf",
+      "mitigationKey": "confirmation-of-payee",
+      "isPrimary": true,
+      "explanation": "Surfacing a name mismatch gives the customer the chance to stop before sending."
+    }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "do_not_ship",
+    "rationale": "Two of the findings are critical in a regulated money-movement flow: any stolen token can move unlimited funds, and a retried request can debit a customer twice. Both cause direct, irreversible financial loss to real customers, and the missing audit integrity means the bank could not reconstruct what happened afterwards. Unlike a contained bug, step-up auth and idempotency are structural changes to the payment path. 'Ship with conditions' is defensible only if the launch is limited to low-value transfers between the customer's own accounts.",
+    "suggestedConditions": [
+      "Implement step-up authentication for high-value and new-payee transfers.",
+      "Add idempotency keys to the transfer execution path.",
+      "Move audit events to an append-only store with separate credentials.",
+      "Enable mTLS on the gateway-to-core hop.",
+      "Add confirmation-of-payee before external settlement."
+    ]
+  }
+}

@@ -1,0 +1,451 @@
+{
+  "category": {
+    "name": "Cloud Security",
+    "slug": "cloud-security",
+    "description": "Infrastructure threat modeling: identity, network boundaries, secrets, supply chain and blast radius.",
+    "sortOrder": 3
+  },
+  "lab": {
+    "title": "Multi-Tenant SaaS on Kubernetes",
+    "slug": "saas-kubernetes",
+    "summary": "A shared cluster running workloads for many customers, where isolation and identity are the whole game.",
+    "businessContext": "A SaaS company runs all customer workloads on one Kubernetes cluster to keep infrastructure costs down.",
+    "systemContext": "An ingress controller fronts per-tenant application pods, which share a node pool, a secrets store, a managed database and a CI pipeline that deploys into the cluster.",
+    "difficulty": "advanced",
+    "estimatedMinutes": 45,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "client",
+        "type": "external_entity",
+        "label": "Customer Traffic",
+        "description": "Requests from many tenants",
+        "trustBoundary": "internet",
+        "assets": [
+          "tenant_request"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "ingress",
+        "type": "process",
+        "label": "Ingress Controller",
+        "description": "Routes traffic to tenant workloads",
+        "trustBoundary": "cluster_edge",
+        "assets": [
+          "tenant_request"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "pods",
+        "type": "service",
+        "label": "Tenant Workload Pods",
+        "description": "Application pods for all tenants on a shared node pool",
+        "trustBoundary": "cluster",
+        "assets": [
+          "tenant_data"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "secrets",
+        "type": "data_store",
+        "label": "Secrets Store",
+        "description": "Database credentials and API keys",
+        "trustBoundary": "cluster",
+        "assets": [
+          "credentials"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "db",
+        "type": "data_store",
+        "label": "Managed Database",
+        "description": "Shared database holding every tenant's data",
+        "trustBoundary": "data_plane",
+        "assets": [
+          "tenant_data"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "ci",
+        "type": "process",
+        "label": "CI Pipeline",
+        "description": "Builds images and deploys to the cluster",
+        "trustBoundary": "build",
+        "assets": [
+          "deploy_credentials"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "registry",
+        "type": "third_party",
+        "label": "Container Registry",
+        "description": "Stores built images",
+        "trustBoundary": "internet",
+        "assets": [
+          "image"
+        ],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-client-ingress",
+        "source": "client",
+        "target": "ingress",
+        "label": "HTTPS request",
+        "protocol": "HTTPS",
+        "data": [
+          "tenant_request"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-ingress-pods",
+        "source": "ingress",
+        "target": "pods",
+        "label": "Route to tenant pod",
+        "protocol": "HTTP",
+        "data": [
+          "tenant_request"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-pods-secrets",
+        "source": "pods",
+        "target": "secrets",
+        "label": "Read credentials",
+        "protocol": "TLS",
+        "data": [
+          "credentials"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-pods-db",
+        "source": "pods",
+        "target": "db",
+        "label": "Query tenant data",
+        "protocol": "TLS",
+        "data": [
+          "tenant_data"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-ci-registry",
+        "source": "ci",
+        "target": "registry",
+        "label": "Push image",
+        "protocol": "HTTPS",
+        "data": [
+          "image"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-ci-cluster",
+        "source": "ci",
+        "target": "pods",
+        "label": "Deploy workload",
+        "protocol": "HTTPS",
+        "data": [
+          "deploy_credentials"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      {
+        "id": "internet",
+        "label": "Internet",
+        "description": "Untrusted public network"
+      },
+      {
+        "id": "cluster_edge",
+        "label": "Cluster Edge",
+        "description": "Ingress layer"
+      },
+      {
+        "id": "cluster",
+        "label": "Cluster",
+        "description": "Shared Kubernetes workloads"
+      },
+      {
+        "id": "data_plane",
+        "label": "Data Plane",
+        "description": "Managed database"
+      },
+      {
+        "id": "build",
+        "label": "Build",
+        "description": "CI/CD environment"
+      }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "shared-db-creds",
+      "title": "One database credential shared by all tenant pods",
+      "description": "Every pod reads the same credential from the secrets store, so that credential can reach every tenant's data.",
+      "affectedNodeIds": [
+        "secrets",
+        "pods",
+        "db"
+      ],
+      "affectedEdgeIds": [
+        "e-pods-secrets",
+        "e-pods-db"
+      ],
+      "hint": "What can one compromised pod reach with the credential it already holds?"
+    },
+    {
+      "key": "no-network-policy",
+      "title": "No network policy between tenant pods",
+      "description": "Pods share a flat cluster network with nothing described that stops one tenant's pod talking to another's.",
+      "affectedNodeIds": [
+        "pods"
+      ],
+      "affectedEdgeIds": [
+        "e-ingress-pods"
+      ],
+      "hint": "Kubernetes allows all pod-to-pod traffic by default."
+    },
+    {
+      "key": "ci-cluster-admin",
+      "title": "CI holds standing cluster-admin credentials",
+      "description": "The pipeline deploys with a long-lived, highly privileged credential and nothing scopes it per environment.",
+      "affectedNodeIds": [
+        "ci"
+      ],
+      "affectedEdgeIds": [
+        "e-ci-cluster"
+      ],
+      "hint": "What does a compromised build job get to do?"
+    },
+    {
+      "key": "shared-nodes",
+      "title": "Tenants share nodes with no isolation boundary",
+      "description": "Workloads from different customers run on the same kernel with no described sandboxing or dedicated node pools.",
+      "affectedNodeIds": [
+        "pods"
+      ],
+      "affectedEdgeIds": [],
+      "hint": "What does a container escape reach?"
+    },
+    {
+      "key": "unverified-images",
+      "title": "No image provenance or signature verification",
+      "description": "The cluster pulls images from the registry with no described signing, scanning or admission control.",
+      "affectedNodeIds": [
+        "registry",
+        "pods"
+      ],
+      "affectedEdgeIds": [
+        "e-ci-registry"
+      ],
+      "hint": "How does the cluster know this image is the one CI built?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "cross-tenant-data",
+      "title": "One compromised pod reads every tenant's data",
+      "description": "Because all pods share a database credential, a single application vulnerability escalates immediately into a full multi-tenant breach.",
+      "category": "Information disclosure",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "secrets",
+        "db"
+      ],
+      "affectedEdgeIds": [
+        "e-pods-db"
+      ],
+      "acceptedAliases": [
+        "cross tenant access",
+        "shared credential",
+        "one pod reads all data",
+        "tenant isolation failure",
+        "blast radius"
+      ],
+      "learnerExplanation": "Shared credentials convert a local bug into a platform-wide breach."
+    },
+    {
+      "key": "supply-chain",
+      "title": "Malicious image deployed through the pipeline",
+      "description": "With no signature verification, a tampered image or a compromised build reaches production and runs with cluster access.",
+      "category": "Tampering",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "ci",
+        "registry",
+        "pods"
+      ],
+      "affectedEdgeIds": [
+        "e-ci-registry",
+        "e-ci-cluster"
+      ],
+      "acceptedAliases": [
+        "supply chain attack",
+        "malicious image",
+        "unsigned images",
+        "compromised CI",
+        "build pipeline compromise"
+      ],
+      "learnerExplanation": "The pipeline is production infrastructure with production privileges."
+    },
+    {
+      "key": "lateral-movement",
+      "title": "Lateral movement between tenant workloads",
+      "description": "A flat pod network lets an attacker who lands in one tenant's pod reach every other tenant's service directly.",
+      "category": "Elevation of privilege",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "pods"
+      ],
+      "affectedEdgeIds": [
+        "e-ingress-pods"
+      ],
+      "acceptedAliases": [
+        "lateral movement",
+        "east west traffic",
+        "no network segmentation",
+        "pod to pod access"
+      ],
+      "learnerExplanation": "Default-allow networking is the cloud equivalent of a flat office LAN."
+    },
+    {
+      "key": "container-escape",
+      "title": "Container escape reaches co-tenant workloads",
+      "description": "Shared nodes mean a kernel-level escape lands the attacker beside other customers' running containers and their in-memory secrets.",
+      "category": "Elevation of privilege",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "pods"
+      ],
+      "affectedEdgeIds": [],
+      "acceptedAliases": [
+        "container breakout",
+        "node compromise",
+        "kernel escape",
+        "noisy neighbour compromise"
+      ],
+      "learnerExplanation": "Containers are a boundary, not a security boundary, without extra isolation."
+    },
+    {
+      "key": "ci-privilege",
+      "title": "Compromised build job takes over the cluster",
+      "description": "Standing cluster-admin in CI means any dependency or PR that runs in the pipeline can seize the whole platform.",
+      "category": "Elevation of privilege",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "ci"
+      ],
+      "affectedEdgeIds": [
+        "e-ci-cluster"
+      ],
+      "acceptedAliases": [
+        "CI compromise",
+        "overprivileged pipeline",
+        "standing credentials",
+        "cluster admin token"
+      ],
+      "learnerExplanation": "Long-lived high privilege is an availability of last resort for attackers."
+    }
+  ],
+  "mitigations": [
+    {
+      "key": "per-tenant-creds",
+      "title": "Per-tenant database credentials with row-level scoping",
+      "description": "Issue a distinct short-lived credential per tenant workload so one pod can only reach its own data."
+    },
+    {
+      "key": "signed-images",
+      "title": "Image signing with admission control",
+      "description": "Sign images in CI and refuse to admit anything unsigned or unscanned into the cluster."
+    },
+    {
+      "key": "network-policies",
+      "title": "Default-deny network policies between tenants",
+      "description": "Deny all pod-to-pod traffic by default and allow only the specific flows each workload needs."
+    },
+    {
+      "key": "workload-isolation",
+      "title": "Dedicated node pools or sandboxed runtimes",
+      "description": "Separate tenants onto their own nodes, or use a sandboxed runtime so an escape does not land beside another customer."
+    },
+    {
+      "key": "short-lived-ci",
+      "title": "Short-lived, scoped deployment identities",
+      "description": "Replace standing cluster-admin with workload identity federation issuing narrowly scoped, short-lived tokens."
+    },
+    {
+      "key": "tls-ingress",
+      "title": "Terminate TLS at the ingress",
+      "description": "Already in place, and it says nothing about what happens between pods once traffic is inside."
+    },
+    {
+      "key": "pod-limits",
+      "title": "CPU and memory limits on pods",
+      "description": "Prevents noisy neighbours from starving each other, but provides no security isolation."
+    }
+  ],
+  "threatMitigations": [
+    {
+      "threatKey": "cross-tenant-data",
+      "mitigationKey": "per-tenant-creds",
+      "isPrimary": true,
+      "explanation": "Scoped credentials mean a compromised pod reaches only its own tenant's data."
+    },
+    {
+      "threatKey": "supply-chain",
+      "mitigationKey": "signed-images",
+      "isPrimary": true,
+      "explanation": "Admission control refuses anything the pipeline did not legitimately sign."
+    },
+    {
+      "threatKey": "lateral-movement",
+      "mitigationKey": "network-policies",
+      "isPrimary": true,
+      "explanation": "Default-deny removes the east-west path between tenants."
+    },
+    {
+      "threatKey": "container-escape",
+      "mitigationKey": "workload-isolation",
+      "isPrimary": true,
+      "explanation": "Separate nodes or a sandboxed runtime means an escape does not reach co-tenants."
+    },
+    {
+      "threatKey": "ci-privilege",
+      "mitigationKey": "short-lived-ci",
+      "isPrimary": true,
+      "explanation": "Short-lived scoped tokens shrink both the window and the reach of a pipeline compromise."
+    }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "do_not_ship",
+    "rationale": "Multi-tenancy is the product, and the two critical findings both defeat it. A single shared database credential means one ordinary application bug in any tenant's workload becomes a breach of every customer at once. No image signing means the deployment path itself is unauthenticated. Neither is mitigated by the controls that are present, and both are foundational rather than incremental — retrofitting per-tenant credentials after launch means re-architecting the data access path while customers are live. Single-tenant deployment for a first customer would be shippable.",
+    "suggestedConditions": [
+      "Issue per-tenant, short-lived database credentials before onboarding a second customer.",
+      "Enforce image signing and admission control on the cluster.",
+      "Apply default-deny network policies between tenant workloads.",
+      "Separate tenants onto dedicated node pools or a sandboxed runtime.",
+      "Replace standing CI cluster-admin with short-lived scoped identities."
+    ]
+  }
+}

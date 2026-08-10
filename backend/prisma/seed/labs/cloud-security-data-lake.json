@@ -1,0 +1,447 @@
+{
+  "category": {
+    "name": "Cloud Security",
+    "slug": "cloud-security",
+    "description": "Infrastructure threat modeling: identity, network boundaries, secrets, supply chain and blast radius.",
+    "sortOrder": 3
+  },
+  "lab": {
+    "title": "Serverless Data Lake",
+    "slug": "serverless-data-lake",
+    "summary": "An event-driven analytics pipeline built from object storage, functions and a query engine.",
+    "businessContext": "A media company is building an analytics lake so product teams can query user behaviour data themselves.",
+    "systemContext": "Client events land in an ingest bucket, a function transforms them into a curated bucket, a query engine serves analysts, and a scheduled job exports aggregates to a partner.",
+    "difficulty": "intermediate",
+    "estimatedMinutes": 35,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "app",
+        "type": "external_entity",
+        "label": "Client Apps",
+        "description": "Emit behavioural events",
+        "trustBoundary": "internet",
+        "assets": [
+          "event",
+          "user_id"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "ingest",
+        "type": "data_store",
+        "label": "Ingest Bucket",
+        "description": "Raw event landing zone",
+        "trustBoundary": "cloud",
+        "assets": [
+          "raw_event"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "transform",
+        "type": "process",
+        "label": "Transform Function",
+        "description": "Cleans and enriches events",
+        "trustBoundary": "cloud",
+        "assets": [
+          "event"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "curated",
+        "type": "data_store",
+        "label": "Curated Bucket",
+        "description": "Query-ready datasets",
+        "trustBoundary": "cloud",
+        "assets": [
+          "user_behaviour"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "query",
+        "type": "service",
+        "label": "Query Engine",
+        "description": "Serves ad-hoc analyst queries",
+        "trustBoundary": "cloud",
+        "assets": [
+          "user_behaviour"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "analyst",
+        "type": "external_entity",
+        "label": "Analyst",
+        "description": "Runs queries from a laptop",
+        "trustBoundary": "corporate",
+        "assets": [
+          "query"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "partner",
+        "type": "third_party",
+        "label": "Partner Export",
+        "description": "Receives scheduled aggregate extracts",
+        "trustBoundary": "internet",
+        "assets": [
+          "aggregate"
+        ],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-app-ingest",
+        "source": "app",
+        "target": "ingest",
+        "label": "Write event",
+        "protocol": "HTTPS",
+        "data": [
+          "raw_event",
+          "user_id"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-ingest-transform",
+        "source": "ingest",
+        "target": "transform",
+        "label": "Object-created trigger",
+        "protocol": "Event",
+        "data": [
+          "raw_event"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-transform-curated",
+        "source": "transform",
+        "target": "curated",
+        "label": "Write dataset",
+        "protocol": "TLS",
+        "data": [
+          "user_behaviour"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-query-curated",
+        "source": "query",
+        "target": "curated",
+        "label": "Read dataset",
+        "protocol": "TLS",
+        "data": [
+          "user_behaviour"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-analyst-query",
+        "source": "analyst",
+        "target": "query",
+        "label": "Run query",
+        "protocol": "HTTPS",
+        "data": [
+          "query"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-curated-partner",
+        "source": "curated",
+        "target": "partner",
+        "label": "Scheduled export",
+        "protocol": "HTTPS",
+        "data": [
+          "aggregate"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      {
+        "id": "internet",
+        "label": "Internet",
+        "description": "Untrusted public network"
+      },
+      {
+        "id": "cloud",
+        "label": "Cloud Account",
+        "description": "Managed cloud services"
+      },
+      {
+        "id": "corporate",
+        "label": "Corporate",
+        "description": "Employee devices"
+      }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "client-writes-direct",
+      "title": "Clients write directly into the ingest bucket",
+      "description": "Applications hold credentials that write straight to object storage with no described validation, quota or per-client scoping.",
+      "affectedNodeIds": [
+        "app",
+        "ingest"
+      ],
+      "affectedEdgeIds": [
+        "e-app-ingest"
+      ],
+      "hint": "What else can a leaked client credential do to that bucket?"
+    },
+    {
+      "key": "function-overprivileged",
+      "title": "Transform function has broad storage permissions",
+      "description": "The function's role is not scoped to the two buckets it needs, so a compromise reaches far more than the pipeline.",
+      "affectedNodeIds": [
+        "transform"
+      ],
+      "affectedEdgeIds": [
+        "e-transform-curated"
+      ],
+      "hint": "What is the smallest set of permissions this function actually needs?"
+    },
+    {
+      "key": "raw-user-ids",
+      "title": "Raw user identifiers persist into the curated layer",
+      "description": "No pseudonymisation happens during transform, so every analyst query runs against directly identifiable behaviour.",
+      "affectedNodeIds": [
+        "curated",
+        "transform"
+      ],
+      "affectedEdgeIds": [
+        "e-transform-curated"
+      ],
+      "hint": "Does behavioural analysis need to know exactly who?"
+    },
+    {
+      "key": "unrestricted-query",
+      "title": "Analysts query the full curated dataset with no column restrictions",
+      "description": "Nothing describes column-level or row-level access control on the query engine.",
+      "affectedNodeIds": [
+        "query",
+        "analyst"
+      ],
+      "affectedEdgeIds": [
+        "e-analyst-query"
+      ],
+      "hint": "Should every analyst see every field?"
+    },
+    {
+      "key": "export-unverified",
+      "title": "Partner export has no described integrity or scope check",
+      "description": "A scheduled job pushes extracts to a partner endpoint with no stated verification of what is included.",
+      "affectedNodeIds": [
+        "partner",
+        "curated"
+      ],
+      "affectedEdgeIds": [
+        "e-curated-partner"
+      ],
+      "hint": "How would anyone notice if the export started including a raw column?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "bucket-exposure",
+      "title": "Leaked client credential exposes or poisons the ingest bucket",
+      "description": "A credential extracted from a mobile app grants direct object storage access, allowing an attacker to read other clients' raw events or flood the bucket.",
+      "category": "Information disclosure",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "ingest",
+        "app"
+      ],
+      "affectedEdgeIds": [
+        "e-app-ingest"
+      ],
+      "acceptedAliases": [
+        "leaked credentials",
+        "public bucket",
+        "direct storage access",
+        "credential in mobile app",
+        "bucket misconfiguration"
+      ],
+      "learnerExplanation": "Credentials shipped to clients should be assumed public."
+    },
+    {
+      "key": "analyst-overreach",
+      "title": "Analyst reads identifiable behaviour beyond their need",
+      "description": "Unrestricted query access over identifiable data means any analyst — or anyone who phishes one — can profile individual users.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "query",
+        "curated"
+      ],
+      "affectedEdgeIds": [
+        "e-analyst-query"
+      ],
+      "acceptedAliases": [
+        "insider access",
+        "no column level security",
+        "analyst sees everything",
+        "overbroad data access"
+      ],
+      "learnerExplanation": "Self-service analytics multiplies the number of people holding sensitive data."
+    },
+    {
+      "key": "function-blast-radius",
+      "title": "Compromised transform function reaches unrelated storage",
+      "description": "An overprivileged execution role turns a bug in the transform code into access across the cloud account.",
+      "category": "Elevation of privilege",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "transform"
+      ],
+      "affectedEdgeIds": [
+        "e-transform-curated"
+      ],
+      "acceptedAliases": [
+        "overprivileged role",
+        "IAM too broad",
+        "blast radius",
+        "function compromise",
+        "excessive permissions"
+      ],
+      "learnerExplanation": "Least privilege is what turns a compromise into an incident instead of a breach."
+    },
+    {
+      "key": "export-leak",
+      "title": "Scheduled export silently widens to include personal data",
+      "description": "With no scope verification, a schema change quietly sends identifiable columns to an external partner.",
+      "category": "Information disclosure",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "partner"
+      ],
+      "affectedEdgeIds": [
+        "e-curated-partner"
+      ],
+      "acceptedAliases": [
+        "export includes PII",
+        "schema drift",
+        "partner receives too much",
+        "unverified export"
+      ],
+      "learnerExplanation": "Automated exports drift; nobody reads them after week one."
+    },
+    {
+      "key": "cost-dos",
+      "title": "Event flooding drives unbounded storage and compute cost",
+      "description": "With no quota, an attacker or a buggy client can trigger the transform function millions of times.",
+      "category": "Denial of service",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "ingest",
+        "transform"
+      ],
+      "affectedEdgeIds": [
+        "e-ingest-transform"
+      ],
+      "acceptedAliases": [
+        "denial of wallet",
+        "cost attack",
+        "unbounded scaling",
+        "function flooding",
+        "no quota"
+      ],
+      "learnerExplanation": "In serverless the availability risk usually shows up as a bill."
+    }
+  ],
+  "mitigations": [
+    {
+      "key": "ingest-api",
+      "title": "Ingest through an authenticated API, not direct storage",
+      "description": "Put a validating endpoint in front of the bucket so clients never hold storage credentials."
+    },
+    {
+      "key": "scoped-iam",
+      "title": "Least-privilege role scoped to the two buckets",
+      "description": "Restrict the function's execution role to the specific prefixes and actions it needs."
+    },
+    {
+      "key": "pseudonymise",
+      "title": "Pseudonymise identifiers during transform",
+      "description": "Replace user identifiers with per-dataset tokens so curated data is not directly identifiable."
+    },
+    {
+      "key": "column-security",
+      "title": "Column and row-level access control in the query engine",
+      "description": "Grant analysts only the fields their role requires and log what they query."
+    },
+    {
+      "key": "export-contract",
+      "title": "Schema contract and review on the partner export",
+      "description": "Pin the exported columns, fail the job on drift, and alert on any change."
+    },
+    {
+      "key": "versioning",
+      "title": "Enable object versioning on the buckets",
+      "description": "Helps recover from accidental deletion; it does not restrict who can read or write."
+    },
+    {
+      "key": "encrypt-buckets",
+      "title": "Enable default encryption at rest",
+      "description": "Baseline hygiene that is almost certainly already on and addresses none of these threats."
+    }
+  ],
+  "threatMitigations": [
+    {
+      "threatKey": "bucket-exposure",
+      "mitigationKey": "ingest-api",
+      "isPrimary": true,
+      "explanation": "Clients holding no storage credential cannot leak one."
+    },
+    {
+      "threatKey": "analyst-overreach",
+      "mitigationKey": "column-security",
+      "isPrimary": true,
+      "explanation": "Field-level grants limit what any single analyst can reach."
+    },
+    {
+      "threatKey": "function-blast-radius",
+      "mitigationKey": "scoped-iam",
+      "isPrimary": true,
+      "explanation": "A narrowly scoped role keeps a code bug inside the pipeline."
+    },
+    {
+      "threatKey": "export-leak",
+      "mitigationKey": "export-contract",
+      "isPrimary": true,
+      "explanation": "A pinned schema that fails on drift catches the silent widening."
+    },
+    {
+      "threatKey": "cost-dos",
+      "mitigationKey": "ingest-api",
+      "isPrimary": false,
+      "explanation": "An authenticated ingest endpoint is also where quotas and rate limits belong."
+    }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "ship_with_conditions",
+    "rationale": "One critical issue — client applications holding direct object storage credentials — must be closed before any real traffic, because those credentials should be assumed public the moment the app ships. Everything else is contained and can be sequenced: the pipeline itself is well-shaped, the trust boundaries are sensible, and no single remaining finding causes irreversible harm. This is a reasonable candidate for a conditional launch with an internal-only dataset while the ingest path is replaced.",
+    "suggestedConditions": [
+      "Replace direct client writes with an authenticated ingest API before any production traffic.",
+      "Scope the transform function's execution role to the two buckets it uses.",
+      "Pseudonymise user identifiers during transform.",
+      "Apply column-level access control before opening self-service queries to analysts.",
+      "Pin the partner export schema and alert on drift."
+    ]
+  }
+}

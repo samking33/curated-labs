@@ -1,0 +1,461 @@
+{
+  "category": {
+    "name": "Privacy",
+    "slug": "privacy",
+    "description": "Data protection threat modeling: consent, minimisation, retention, secondary use and cross-border transfer.",
+    "sortOrder": 1
+  },
+  "lab": {
+    "title": "Retail Loyalty & Marketing",
+    "slug": "loyalty-marketing",
+    "summary": "A loyalty programme where purchase history flows into marketing, analytics and third-party ad platforms.",
+    "businessContext": "A supermarket chain runs a loyalty card scheme and wants to personalise offers using purchase history.",
+    "systemContext": "In-store tills and an app feed a loyalty service, which writes to a customer profile store, syncs to a marketing platform, and shares audiences with an advertising network.",
+    "difficulty": "beginner",
+    "estimatedMinutes": 30,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "shopper",
+        "type": "external_entity",
+        "label": "Shopper",
+        "description": "Scans a loyalty card at checkout",
+        "trustBoundary": "internet",
+        "assets": [
+          "purchase_history",
+          "identity"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "till",
+        "type": "process",
+        "label": "Store Till",
+        "description": "Captures the basket and card scan",
+        "trustBoundary": "store",
+        "assets": [
+          "basket",
+          "card_id"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "loyalty",
+        "type": "service",
+        "label": "Loyalty Service",
+        "description": "Awards points and builds the profile",
+        "trustBoundary": "platform",
+        "assets": [
+          "profile"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "profiles",
+        "type": "data_store",
+        "label": "Customer Profile Store",
+        "description": "Identity, contact details and full purchase history",
+        "trustBoundary": "platform",
+        "assets": [
+          "identity",
+          "purchase_history"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "marketing",
+        "type": "service",
+        "label": "Marketing Platform",
+        "description": "Segments customers and sends campaigns",
+        "trustBoundary": "platform",
+        "assets": [
+          "segment",
+          "email"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "adnet",
+        "type": "third_party",
+        "label": "Advertising Network",
+        "description": "Receives audience lists for targeting",
+        "trustBoundary": "internet",
+        "assets": [
+          "hashed_email",
+          "segment"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "analytics",
+        "type": "data_store",
+        "label": "Analytics Warehouse",
+        "description": "Business reporting over all transactions",
+        "trustBoundary": "analytics",
+        "assets": [
+          "purchase_history"
+        ],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-shopper-till",
+        "source": "shopper",
+        "target": "till",
+        "label": "Scan card",
+        "protocol": "In-store",
+        "data": [
+          "card_id",
+          "basket"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-till-loyalty",
+        "source": "till",
+        "target": "loyalty",
+        "label": "Submit transaction",
+        "protocol": "HTTPS",
+        "data": [
+          "basket",
+          "card_id"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-loyalty-profiles",
+        "source": "loyalty",
+        "target": "profiles",
+        "label": "Update profile",
+        "protocol": "TLS",
+        "data": [
+          "identity",
+          "purchase_history"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-loyalty-marketing",
+        "source": "loyalty",
+        "target": "marketing",
+        "label": "Sync segments",
+        "protocol": "HTTP",
+        "data": [
+          "segment",
+          "email"
+        ],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-marketing-adnet",
+        "source": "marketing",
+        "target": "adnet",
+        "label": "Upload audience",
+        "protocol": "HTTPS",
+        "data": [
+          "hashed_email",
+          "segment"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-profiles-analytics",
+        "source": "profiles",
+        "target": "analytics",
+        "label": "Nightly export",
+        "protocol": "TLS",
+        "data": [
+          "purchase_history"
+        ],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      {
+        "id": "internet",
+        "label": "Internet",
+        "description": "Untrusted public network"
+      },
+      {
+        "id": "store",
+        "label": "Store Network",
+        "description": "In-store point-of-sale network"
+      },
+      {
+        "id": "platform",
+        "label": "Platform",
+        "description": "Loyalty and marketing systems"
+      },
+      {
+        "id": "analytics",
+        "label": "Analytics",
+        "description": "Secondary-use environment"
+      }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "no-consent-granularity",
+      "title": "One consent covers points, marketing and ad sharing",
+      "description": "Joining the scheme is treated as consent for every downstream use, including sharing audiences with an advertising network.",
+      "affectedNodeIds": [
+        "loyalty",
+        "adnet"
+      ],
+      "affectedEdgeIds": [
+        "e-marketing-adnet"
+      ],
+      "hint": "Did the shopper who wanted points agree to be an ad audience?"
+    },
+    {
+      "key": "sensitive-inference",
+      "title": "Purchase history permits sensitive inference",
+      "description": "Basket data reveals pregnancy, health conditions, religion and alcohol dependency with no described handling for special-category inference.",
+      "affectedNodeIds": [
+        "profiles",
+        "marketing"
+      ],
+      "affectedEdgeIds": [
+        "e-loyalty-profiles"
+      ],
+      "hint": "What can you learn about someone from what they buy?"
+    },
+    {
+      "key": "indefinite-history",
+      "title": "Purchase history retained indefinitely",
+      "description": "Every transaction persists forever with no retention schedule and no described deletion path.",
+      "affectedNodeIds": [
+        "profiles"
+      ],
+      "affectedEdgeIds": [
+        "e-profiles-analytics"
+      ],
+      "hint": "How far back does personalisation actually need?"
+    },
+    {
+      "key": "hashing-as-anonymisation",
+      "title": "Hashed email treated as anonymised",
+      "description": "Audience uploads use hashed emails and are described as anonymous, but the hash is a stable identifier the ad network can already match.",
+      "affectedNodeIds": [
+        "adnet",
+        "marketing"
+      ],
+      "affectedEdgeIds": [
+        "e-marketing-adnet"
+      ],
+      "hint": "Is a hash of a known value actually anonymous?"
+    },
+    {
+      "key": "no-deletion-path",
+      "title": "No propagation of deletion to downstream systems",
+      "description": "Nothing describes how a deletion request reaches marketing, analytics or the ad network once data has been shared.",
+      "affectedNodeIds": [
+        "analytics",
+        "adnet"
+      ],
+      "affectedEdgeIds": [
+        "e-marketing-adnet",
+        "e-profiles-analytics"
+      ],
+      "hint": "A shopper asks to be deleted. What actually happens?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "unconsented-sharing",
+      "title": "Personal data shared with an ad network without valid consent",
+      "description": "Audience uploads occur on the basis of a bundled consent the shopper never meaningfully gave, exposing the retailer to regulatory action and the shopper to profiling they did not choose.",
+      "category": "Information disclosure",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "adnet",
+        "marketing"
+      ],
+      "affectedEdgeIds": [
+        "e-marketing-adnet"
+      ],
+      "acceptedAliases": [
+        "no consent",
+        "bundled consent",
+        "sharing without permission",
+        "unlawful processing",
+        "third party ad sharing"
+      ],
+      "learnerExplanation": "Consent has to be specific and separable to be consent at all."
+    },
+    {
+      "key": "sensitive-disclosure",
+      "title": "Sensitive inference disclosed through targeted offers",
+      "description": "A targeted offer can reveal an inferred pregnancy or health condition to whoever else opens the post or sees the phone.",
+      "category": "Information disclosure",
+      "expectedPriority": "critical",
+      "affectedNodeIds": [
+        "marketing",
+        "profiles"
+      ],
+      "affectedEdgeIds": [
+        "e-loyalty-marketing"
+      ],
+      "acceptedAliases": [
+        "sensitive inference",
+        "revealing pregnancy",
+        "special category data",
+        "inferred health data",
+        "outing someone"
+      ],
+      "learnerExplanation": "The classic loyalty-data harm: the system tells a household something private before the person does."
+    },
+    {
+      "key": "undeletable",
+      "title": "Deletion requests cannot be honoured downstream",
+      "description": "Once data reaches analytics and the ad network there is no described mechanism to remove it, so the retailer cannot meet a lawful erasure request.",
+      "category": "Repudiation",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "analytics",
+        "adnet"
+      ],
+      "affectedEdgeIds": [
+        "e-profiles-analytics"
+      ],
+      "acceptedAliases": [
+        "right to erasure",
+        "cannot delete",
+        "GDPR deletion",
+        "no data subject rights",
+        "deletion not propagated"
+      ],
+      "learnerExplanation": "You cannot delete what you have already given away without a contract that says you can."
+    },
+    {
+      "key": "profile-breach",
+      "title": "Bulk disclosure of lifetime purchase histories",
+      "description": "An indefinitely retained profile store is a uniquely revealing dataset — years of behaviour tied to a real identity.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": [
+        "profiles"
+      ],
+      "affectedEdgeIds": [
+        "e-loyalty-profiles"
+      ],
+      "acceptedAliases": [
+        "profile leak",
+        "purchase history breach",
+        "data breach",
+        "customer data dump"
+      ],
+      "learnerExplanation": "Retention turns a breach of one day's data into a breach of a decade's."
+    },
+    {
+      "key": "reidentification",
+      "title": "Re-identification of 'anonymous' audience uploads",
+      "description": "Hashed emails are stable identifiers that the ad network already holds in plaintext, so the upload is pseudonymous at best.",
+      "category": "Information disclosure",
+      "expectedPriority": "medium",
+      "affectedNodeIds": [
+        "adnet"
+      ],
+      "affectedEdgeIds": [
+        "e-marketing-adnet"
+      ],
+      "acceptedAliases": [
+        "reidentification",
+        "hash is not anonymous",
+        "pseudonymisation",
+        "matching hashed emails"
+      ],
+      "learnerExplanation": "Hashing a known identifier does not anonymise it."
+    }
+  ],
+  "mitigations": [
+    {
+      "key": "granular-consent",
+      "title": "Separate, revocable consent per purpose",
+      "description": "Ask separately for points, personalised marketing and third-party sharing, and let each be withdrawn independently."
+    },
+    {
+      "key": "sensitive-exclusion",
+      "title": "Exclude sensitive categories from targeting",
+      "description": "Block inference and targeting on health, pregnancy, religion and similar categories, and review campaigns before send."
+    },
+    {
+      "key": "deletion-propagation",
+      "title": "Deletion propagated across every downstream system",
+      "description": "Contract for downstream deletion and run a verified erasure workflow that reaches analytics and the ad network."
+    },
+    {
+      "key": "history-retention",
+      "title": "Rolling retention window on purchase history",
+      "description": "Keep a bounded window for personalisation and aggregate anything older."
+    },
+    {
+      "key": "stop-audience-upload",
+      "title": "Stop uploading identifiers to the ad network",
+      "description": "Use on-platform targeting rather than sharing customer identifiers with a third party."
+    },
+    {
+      "key": "encrypt-profiles",
+      "title": "Encrypt the profile store at rest",
+      "description": "A sensible baseline that does nothing about consent, retention or sharing."
+    },
+    {
+      "key": "cookie-banner",
+      "title": "Add a cookie banner to the website",
+      "description": "Addresses a different channel entirely and none of the threats here."
+    }
+  ],
+  "threatMitigations": [
+    {
+      "threatKey": "unconsented-sharing",
+      "mitigationKey": "granular-consent",
+      "isPrimary": true,
+      "explanation": "Separable consent is what makes the sharing lawful, or stops it."
+    },
+    {
+      "threatKey": "sensitive-disclosure",
+      "mitigationKey": "sensitive-exclusion",
+      "isPrimary": true,
+      "explanation": "Excluding sensitive categories removes the inference from the targeting path."
+    },
+    {
+      "threatKey": "undeletable",
+      "mitigationKey": "deletion-propagation",
+      "isPrimary": true,
+      "explanation": "A verified downstream workflow is the only way an erasure request is real."
+    },
+    {
+      "threatKey": "profile-breach",
+      "mitigationKey": "history-retention",
+      "isPrimary": true,
+      "explanation": "A bounded window shrinks what any breach can expose."
+    },
+    {
+      "threatKey": "reidentification",
+      "mitigationKey": "stop-audience-upload",
+      "isPrimary": true,
+      "explanation": "Not sharing the identifier is the only reliable answer to re-identification."
+    }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "ship_with_conditions",
+    "rationale": "The technical architecture is sound; the problems are consent and data flow, and both are fixable without re-architecting. Bundled consent and unrestricted sensitive inference are the critical items and must be closed before any campaign sends, but the loyalty and points functionality itself is safe to run today. This is a genuinely conditional case rather than a blocking one — the scheme can operate while marketing and ad sharing stay switched off. 'Do not ship' would be over-cautious given points accrual harms nobody.",
+    "suggestedConditions": [
+      "Split consent per purpose and re-collect before any marketing or ad sharing.",
+      "Exclude sensitive inference categories from targeting and review campaigns pre-send.",
+      "Build and test the downstream deletion workflow before sharing any audience.",
+      "Set a retention window on purchase history.",
+      "Suspend audience uploads to the ad network until consent is re-obtained."
+    ]
+  }
+}

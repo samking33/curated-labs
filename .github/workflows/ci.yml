@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  # Test-only values. Real secrets come from the environment, never from here.
+  DATABASE_URL: postgresql://app:app@localhost:5432/curated_labs_test
+  SESSION_SECRET: ci-session-secret-not-used-in-production
+  NODE_ENV: test
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: curated_labs_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared contracts
+        run: pnpm --filter @curated-labs/shared build
+      - run: pnpm --filter @curated-labs/backend db:generate
+
+      - name: typecheck
+        run: pnpm -r typecheck
+
+      - name: unit-tests
+        run: pnpm -r test
+
+      - name: prisma-migration-check
+        # Fails if schema.prisma has drifted from the committed migrations.
+        run: |
+          pnpm --filter @curated-labs/backend db:deploy
+          pnpm --filter @curated-labs/backend exec prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code && echo "no drift"
+
+      - name: seed-validation
+        run: pnpm --filter @curated-labs/backend db:seed
+
+      - name: build
+        run: pnpm build
+
+      - name: dependency-audit
+        run: pnpm audit --audit-level high
+        continue-on-error: true
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
