@@ -39,6 +39,7 @@
         "assets": [
           "raw_event"
         ],
+        "provider": "aws",
         "metadata": {}
       },
       {
@@ -50,6 +51,7 @@
         "assets": [
           "event"
         ],
+        "provider": "aws",
         "metadata": {}
       },
       {
@@ -61,6 +63,7 @@
         "assets": [
           "user_behaviour"
         ],
+        "provider": "aws",
         "metadata": {}
       },
       {
@@ -72,6 +75,7 @@
         "assets": [
           "user_behaviour"
         ],
+        "provider": "aws",
         "metadata": {}
       },
       {
