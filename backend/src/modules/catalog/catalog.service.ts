@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { dfdGraphSchema, isUuid, type LabDetail, type LabSummary } from "@curated-labs/shared";
+import { extractFromDrawioXml, isUuid, type LabDetail, type LabSummary } from "@curated-labs/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import type { AuthContext } from "../../common/guards/session.guard";
 
@@ -109,7 +109,7 @@ export class CatalogService {
         estimatedMinutes: true,
         version: true,
         category: { select: { id: true, name: true, slug: true } },
-        dfds: { orderBy: { version: "desc" }, take: 1, select: { graphJson: true, version: true } },
+        dfds: { orderBy: { version: "desc" }, take: 1, select: { drawioXml: true, version: true } },
         mitigations: {
           orderBy: { sortOrder: "asc" },
           select: { id: true, title: true, description: true },
@@ -142,7 +142,7 @@ export class CatalogService {
       category: lab.category,
       // Re-validate on the way out: the column is JSONB and a bad seed or a
       // manual edit should fail here, not inside the renderer.
-      dfd: dfdGraphSchema.parse(dfd.graphJson),
+      dfd: extractFromDrawioXml(dfd.drawioXml),
       dfdVersion: dfd.version,
       mitigationOptions: lab.mitigations,
       attempt,
