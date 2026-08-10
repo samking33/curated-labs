@@ -59,4 +59,43 @@ describe("embedUrl", () => {
     const url = embedUrl("view", "http://localhost:3000");
     expect(url).not.toContain("clibs=");
   });
+
+  it("adds libs= for a single provider present in the graph", () => {
+    const url = embedUrl("edit", "http://localhost:3000", ["aws"]);
+    const params = new URLSearchParams(url.split("?")[1]);
+    expect(params.get("libs")).toBe("aws4");
+  });
+
+  // Note: a plain `.not.toContain("libs=")` would be a false negative here
+  // — "clibs=" (always present in edit mode) contains "libs=" as a
+  // substring — so this parses the query string instead of substring-
+  // matching it.
+  it("omits libs= when no provider is present", () => {
+    const url = embedUrl("edit", "http://localhost:3000", []);
+    const params = new URLSearchParams(url.split("?")[1]);
+    expect(params.has("libs")).toBe(false);
+  });
+
+  it("still loads clibs= (our custom DFD shapes) alongside libs=", () => {
+    const url = embedUrl("edit", "http://localhost:3000", ["aws"]);
+    const params = new URLSearchParams(url.split("?")[1]);
+    expect(params.get("clibs")).toContain("dfd-shapes.xml");
+    expect(params.get("libs")).toBe("aws4");
+  });
+
+  // GCP has no queue/pub-sub icon in the gcp3 stencil library — the gcp2
+  // library's embedded-image style covers that type instead (see the
+  // findings doc's style-strings table). Both must load together so the
+  // sidebar's GCP section covers all 4 infra node types.
+  //
+  // Note: checked via URLSearchParams rather than `toContain("libs=gcp3;gcp2")`
+  // — URLSearchParams percent-encodes `;` as `%3B` in the raw query string
+  // (the findings doc confirms the vendored app's single decodeURIComponent
+  // pass before `.split(";")` handles that fine at runtime), so a literal
+  // `;` substring check on the raw URL would never match.
+  it("adds both gcp3 and gcp2 for the gcp provider", () => {
+    const url = embedUrl("edit", "http://localhost:3000", ["gcp"]);
+    const params = new URLSearchParams(url.split("?")[1]);
+    expect(params.get("libs")).toBe("gcp3;gcp2");
+  });
 });

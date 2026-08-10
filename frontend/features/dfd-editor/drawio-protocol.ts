@@ -61,7 +61,23 @@ export function loadAction(xml: string): { action: "load"; xml: string; autosave
  *  caller's `window.location.origin` avoids the proxy path entirely. */
 const DFD_SHAPE_LIBRARY_URL = "/drawio-shapes/dfd-shapes.xml";
 
-export function embedUrl(mode: "view" | "edit", origin = ""): string {
+/** Maps our coarse `provider` values to the vendored build's built-in
+ *  sidebar library keys (`urlParams.libs`, `;`-separated, matched against
+ *  `Sidebar.prototype.configuration[k].id` — see the findings doc's
+ *  `libs=` section for the grep evidence). Live-verified real values, not
+ *  guesses: `azure` resolves to the newer `azure2` library (not the older
+ *  `azure` stencil set the plan first guessed). `gcp` needs BOTH `gcp3`
+ *  (process/data_store/service — the modern named-stencil library) AND
+ *  `gcp2` (queue — gcp3 has no Pub/Sub/queue icon, confirmed by grepping
+ *  its 46 stencil names for pubsub/queue/messag/topic/event and finding
+ *  none), so a single provider can map to more than one library key. */
+const PROVIDER_LIBRARY_KEY: Record<"aws" | "azure" | "gcp", string[]> = {
+  aws: ["aws4"],
+  azure: ["azure2"],
+  gcp: ["gcp3", "gcp2"],
+};
+
+export function embedUrl(mode: "view" | "edit", origin = "", providers: ("aws" | "azure" | "gcp")[] = []): string {
   const params = new URLSearchParams({
     embed: "1",
     proto: "json",
@@ -69,5 +85,9 @@ export function embedUrl(mode: "view" | "edit", origin = ""): string {
     libraries: "1",
     ...(mode === "view" ? { chrome: "0" } : { clibs: `U${origin}${DFD_SHAPE_LIBRARY_URL}` }),
   });
+  if (mode === "edit" && providers.length > 0) {
+    const keys = [...new Set(providers.flatMap((p) => PROVIDER_LIBRARY_KEY[p]))];
+    params.set("libs", keys.join(";"));
+  }
   return `/drawio/index.html?${params.toString()}`;
 }

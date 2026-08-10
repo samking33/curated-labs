@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { compileToDrawioXml, type DfdGraph, type DfdSelection } from "@curated-labs/shared";
 import { embedUrl, loadAction, parseDrawioMessage } from "./drawio-protocol";
 
@@ -52,9 +52,13 @@ export function DfdEditorFrame({
   // way the initial render (server and client alike) has no src, and the
   // iframe only starts loading once, with the right URL, post-mount.
   const [src, setSrc] = useState<string | null>(null);
+  const providers = useMemo(
+    () => [...new Set(graph.nodes.map((n) => n.provider).filter((p): p is "aws" | "azure" | "gcp" => Boolean(p)))],
+    [graph],
+  );
   useEffect(() => {
-    setSrc(embedUrl(mode, window.location.origin));
-  }, [mode]);
+    setSrc(embedUrl(mode, window.location.origin, providers));
+  }, [mode, providers]);
 
   return (
     <iframe
