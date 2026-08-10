@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
-import { labSeedSchema, validateSeedReferences, type LabSeed } from "@curated-labs/shared";
+import { labSeedSchema, validateSeedReferences, type LabSeed, compileToDrawioXml } from "@curated-labs/shared";
 
 /**
  * Loads curated labs from JSON (§18). Validated with Zod plus cross-reference
@@ -66,7 +66,7 @@ async function seedLab(seed: LabSeed) {
       },
     });
 
-    await tx.labDfd.create({ data: { labId: lab.id, version: 1, graphJson: seed.dfd as object } });
+    await tx.labDfd.create({ data: { labId: lab.id, version: 1, drawioXml: compileToDrawioXml(seed.dfd) } });
 
     await tx.labArchitectureIssue.createMany({
       data: seed.architectureIssues.map((issue, i) => ({
