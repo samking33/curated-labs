@@ -138,7 +138,7 @@ export type PromptKey = keyof typeof PROMPTS;
  * (stricter) trust rules, so it lives in a separate registry that
  * `AiService` unions in only at its internal lookup site.
  */
-export const AUTHOR_PROMPT_VERSION = "2026-08-10.1";
+export const AUTHOR_PROMPT_VERSION = "2026-08-11.1";
 
 /**
  * A fixed, distinctive phrase seeded into the generator's system prompt.
