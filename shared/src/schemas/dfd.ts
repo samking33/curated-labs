@@ -11,12 +11,19 @@ export const dfdNodeTypeSchema = z.enum([
   "trust_boundary",
 ]);
 
+/** Coarse cloud-vendor styling hint for the 4 infrastructure node types
+ *  (process/service/data_store/queue). Never set on external_entity,
+ *  third_party, or trust_boundary — those aren't "vendor-flavored." */
+export const dfdNodeProviderSchema = z.enum(["aws", "azure", "gcp"]);
+export type DfdNodeProvider = z.infer<typeof dfdNodeProviderSchema>;
+
 export const dfdNodeSchema = z.object({
   id: z.string().min(1),
   type: dfdNodeTypeSchema,
   label: z.string().min(1),
   description: z.string().default(""),
   trustBoundary: z.string().optional(),
+  provider: dfdNodeProviderSchema.optional(),
   assets: z.array(z.string()).default([]),
   metadata: z.record(z.unknown()).default({}),
 });
