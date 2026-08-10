@@ -5,7 +5,7 @@ import { THREAT_RETRY_LIMIT, type DfdSelection, type LabDetail, type LabStep, ty
 import { DfdViewer } from "@/features/dfd/DfdViewer";
 import { api, ApiRequestError, newIdempotencyKey } from "@/lib/api";
 import { tokens } from "@/lib/tokens";
-import { Alert, Badge, Button, Card } from "@/components/ui";
+import { Alert, Button, Card } from "@/components/ui";
 import { LabHeader, Roadmap } from "./LabHeader";
 import { CheerToast } from "@/features/gamification/CheerToast";
 import { FeedbackPanel } from "./FeedbackPanel";
@@ -41,7 +41,22 @@ const ENDPOINT: Partial<Record<LabStep, string>> = {
  * DFD/answer split. Step components stay presentational so the visual identity
  * can be replaced without touching workflow logic.
  */
-export function LabShell({ lab, attemptId: initialAttemptId }: { lab: LabDetail; attemptId?: string }) {
+export function LabShell({
+  lab,
+  attemptId: initialAttemptId,
+  /** Where "Start" POSTs. Playground: `/playground/scenarios/${id}/attempts`. */
+  startPath = `/labs/${lab.id}/attempts`,
+  /** Prefix for restore, submit and review. Playground: "/playground/attempts". */
+  attemptBase = "/attempts",
+  /** Breadcrumb + completion-card target. Playground: "/app/playground". */
+  backHref = "/app/catalog",
+}: {
+  lab: LabDetail;
+  attemptId?: string;
+  startPath?: string;
+  attemptBase?: string;
+  backHref?: string;
+}) {
   const [attemptId, setAttemptId] = useState<string | undefined>(initialAttemptId);
   const [step, setStep] = useState<LabStep>("intro");
   const [selection, setSelection] = useState<DfdSelection>(null);
@@ -82,7 +97,7 @@ export function LabShell({ lab, attemptId: initialAttemptId }: { lab: LabDetail;
           status: string;
           revealedThreats: RevealedThreat[] | null;
           submissions: { step: LabStep; aiFeedbackJson: unknown; deterministicResultJson: unknown; attemptNumber: number; id: string }[];
-        }>(`/attempts/${initialAttemptId}`);
+        }>(`${attemptBase}/${initialAttemptId}`);
         if (cancelled) return;
 
         setStep(attempt.currentStep === "intro" ? "intro" : attempt.currentStep);
@@ -115,13 +130,13 @@ export function LabShell({ lab, attemptId: initialAttemptId }: { lab: LabDetail;
     return () => {
       cancelled = true;
     };
-  }, [initialAttemptId]);
+  }, [initialAttemptId, attemptBase]);
 
   const start = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      const attempt = await api<{ id: string; currentStep: LabStep }>(`/labs/${lab.id}/attempts`, { method: "POST" });
+      const attempt = await api<{ id: string; currentStep: LabStep }>(startPath, { method: "POST" });
       setAttemptId(attempt.id);
       // Resume where the learner left off rather than restarting the lab.
       setStep(attempt.currentStep === "intro" ? "architecture_issues" : attempt.currentStep);
@@ -130,7 +145,7 @@ export function LabShell({ lab, attemptId: initialAttemptId }: { lab: LabDetail;
     } finally {
       setBusy(false);
     }
-  }, [lab.id]);
+  }, [startPath]);
 
   const submit = useCallback(
     async (target: LabStep, body: unknown) => {
@@ -138,7 +153,7 @@ export function LabShell({ lab, attemptId: initialAttemptId }: { lab: LabDetail;
       setBusy(true);
       setError(null);
       try {
-        const res = await api<StepResult>(`/attempts/${attemptId}/steps/${ENDPOINT[target]}`, {
+        const res = await api<StepResult>(`${attemptBase}/${attemptId}/steps/${ENDPOINT[target]}`, {
           method: "POST",
           body: JSON.stringify(body),
           // A retry after a timeout must not double-submit or re-bill the AI.
@@ -156,7 +171,7 @@ export function LabShell({ lab, attemptId: initialAttemptId }: { lab: LabDetail;
         setBusy(false);
       }
     },
-    [attemptId],
+    [attemptId, attemptBase],
   );
 
   const currentIndex = STEP_LABELS.findIndex((s) => s.step === step);
@@ -264,17 +279,17 @@ export function LabShell({ lab, attemptId: initialAttemptId }: { lab: LabDetail;
                 You worked through the full threat model. Below is everything you said, and how it
                 compared. Nothing here is a score.
               </p>
-              <a href="/app/catalog" style={{ color: tokens.color.accent }}>
+              <a href={backHref} style={{ color: tokens.color.accent }}>
                 Back to catalog
               </a>
             </Card>
-            {attemptId && <LabReview attemptId={attemptId} />}
+            {attemptId && <LabReview attemptId={attemptId} attemptBase={attemptBase} />}
           </>
         );
       default:
         return null;
     }
-  }, [attemptId, step, lab, selection, busy, threats, result, lastThreatAnswer, threatAttempts, start, submit]);
+  }, [attemptId, step, lab, selection, busy, threats, result, lastThreatAnswer, threatAttempts, start, submit, backHref, attemptBase]);
 
   return (
     <div style={{ minHeight: "100vh", background: tokens.color.bg, color: tokens.color.text }}>
@@ -289,6 +304,7 @@ export function LabShell({ lab, attemptId: initialAttemptId }: { lab: LabDetail;
         minutes={lab.estimatedMinutes}
         steps={STEP_LABELS}
         currentIndex={currentIndex}
+        backHref={backHref}
       />
 
       {/*

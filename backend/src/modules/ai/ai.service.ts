@@ -3,21 +3,33 @@ import {
   architectureFeedbackSchema,
   extractJson,
   mitigationFeedbackSchema,
+  playgroundScenarioDraftSchema,
   priorityFeedbackSchema,
   releaseFeedbackSchema,
   redactSecrets,
   restrictIds,
   threatMatchingSchema,
   type AiTaskType,
+  type GenerateScenarioRequest,
+  type PlaygroundScenarioDraft,
 } from "@curated-labs/shared";
 import type { ZodType, ZodTypeDef } from "zod";
 import { CONFIG, type AppConfig } from "../../config";
 import { PrismaService } from "../prisma/prisma.service";
 import { NimClient, NimUnavailableError } from "./nim-client";
-import { PROMPTS, untrusted } from "./prompts";
+import { AUTHOR_PROMPTS, GENERATED_RUBRIC_NOTE, PROMPTS, buildGeneratorUserPrompt, untrusted } from "./prompts";
 
 export type AiStatus = "ok" | "unavailable" | "invalid";
-export type AiResult<T> = { feedback: T | null; status: AiStatus };
+/** `model` is populated on success; only `generateScenario` needs it (to
+ *  persist which model authored a scenario), so it stays optional rather
+ *  than forcing every coaching return site to carry it. */
+export type AiResult<T> = { feedback: T | null; status: AiStatus; model?: string | null };
+
+/** A playground coaching call uses a softer tone — see GENERATED_RUBRIC_NOTE. */
+export type CoachingTone = "curated" | "generated";
+
+type TaskKey = keyof typeof PROMPTS | "playground_scenario";
+const ALL_PROMPTS = { ...PROMPTS, ...AUTHOR_PROMPTS };
 
 type ThreatRow = {
   id: string;
@@ -52,11 +64,15 @@ export class AiService {
     answer: { text: string; referencedNodeIds: string[]; referencedEdgeIds: string[] };
     issues: { id: string; title: string; description: string; hint: string | null }[];
     labId: string;
+    tone?: CoachingTone;
   }): Promise<AiResult<unknown>> {
-    const labData = [
-      "LAB DATA — architecture issue rubric (trusted):",
-      ...input.issues.map((i) => `- id=${i.id} | ${i.title}: ${i.description}`),
-    ].join("\n");
+    const labData = this.withTone(
+      [
+        "LAB DATA — architecture issue rubric (trusted):",
+        ...input.issues.map((i) => `- id=${i.id} | ${i.title}: ${i.description}`),
+      ].join("\n"),
+      input.tone,
+    );
 
     const user = [
       labData,
@@ -98,15 +114,19 @@ export class AiService {
     answer: { threats: string[]; referencedNodeIds: string[]; referencedEdgeIds: string[] };
     canonical: ThreatRow[];
     labId: string;
+    tone?: CoachingTone;
   }): Promise<AiResult<unknown> & { matches?: { canonicalThreatId: string; learnerText: string; confidence: number; reason: string }[] }> {
-    const labData = [
-      "LAB DATA — canonical threats (trusted). Use ONLY these ids:",
-      ...input.canonical.map(
-        (t) =>
-          `- id=${t.id} | ${t.title} [${t.category}]: ${t.description}` +
-          (t.acceptedAliases.length ? ` | also called: ${t.acceptedAliases.join("; ")}` : ""),
-      ),
-    ].join("\n");
+    const labData = this.withTone(
+      [
+        "LAB DATA — canonical threats (trusted). Use ONLY these ids:",
+        ...input.canonical.map(
+          (t) =>
+            `- id=${t.id} | ${t.title} [${t.category}]: ${t.description}` +
+            (t.acceptedAliases.length ? ` | also called: ${t.acceptedAliases.join("; ")}` : ""),
+        ),
+      ].join("\n"),
+      input.tone,
+    );
 
     const user = [
       labData,
@@ -150,15 +170,19 @@ export class AiService {
     answer: { items: { threatId: string; priority: string; rationale: string }[] };
     canonical: ThreatRow[];
     labId: string;
+    tone?: CoachingTone;
   }): Promise<AiResult<unknown>> {
     const byId = new Map(input.canonical.map((t) => [t.id, t]));
-    const labData = [
-      "LAB DATA — expected priorities (trusted):",
-      ...input.answer.items.map((i) => {
-        const t = byId.get(i.threatId);
-        return `- id=${i.threatId} | ${t?.title ?? "unknown"} | expectedPriority=${t?.expectedPriority ?? "unknown"}`;
-      }),
-    ].join("\n");
+    const labData = this.withTone(
+      [
+        "LAB DATA — expected priorities (trusted):",
+        ...input.answer.items.map((i) => {
+          const t = byId.get(i.threatId);
+          return `- id=${i.threatId} | ${t?.title ?? "unknown"} | expectedPriority=${t?.expectedPriority ?? "unknown"}`;
+        }),
+      ].join("\n"),
+      input.tone,
+    );
 
     const user = [
       labData,
@@ -193,6 +217,7 @@ export class AiService {
       mitigation: { id: string; title: string };
     }[];
     labId: string;
+    tone?: CoachingTone;
   }): Promise<AiResult<unknown>> {
     const titles = new Map<string, string>();
     for (const k of input.answerKey) {
@@ -200,14 +225,17 @@ export class AiService {
       titles.set(k.mitigation.id, k.mitigation.title);
     }
 
-    const labData = [
-      "LAB DATA — the platform has ALREADY graded these pairings (trusted). Copy isCorrect exactly:",
-      ...input.graded.map(
-        (g) =>
-          `- threatId=${g.threatId} (${titles.get(g.threatId) ?? "?"}) mitigationId=${g.mitigationId} ` +
-          `(${titles.get(g.mitigationId) ?? "?"}) isCorrect=${g.isCorrect}`,
-      ),
-    ].join("\n");
+    const labData = this.withTone(
+      [
+        "LAB DATA — the platform has ALREADY graded these pairings (trusted). Copy isCorrect exactly:",
+        ...input.graded.map(
+          (g) =>
+            `- threatId=${g.threatId} (${titles.get(g.threatId) ?? "?"}) mitigationId=${g.mitigationId} ` +
+            `(${titles.get(g.mitigationId) ?? "?"}) isCorrect=${g.isCorrect}`,
+        ),
+      ].join("\n"),
+      input.tone,
+    );
 
     const secrets = input.answerKey.flatMap((k) => [k.explanation ?? "", k.threat.title]);
     const result = await this.run(
@@ -236,16 +264,20 @@ export class AiService {
     guidance: { recommendedDecision: string; rationale: string; suggestedConditions: string[] } | null;
     priorSubmissions: { step: string; deterministicResultJson: unknown }[];
     labId: string;
+    tone?: CoachingTone;
   }): Promise<AiResult<unknown>> {
-    const labData = [
-      "LAB DATA — release guidance (trusted, for your reasoning only; do not quote verbatim):",
-      input.guidance
-        ? `- recommended: ${input.guidance.recommendedDecision}\n- rationale: ${input.guidance.rationale}\n- typical conditions: ${input.guidance.suggestedConditions.join("; ")}`
-        : "- none recorded for this lab",
-      "",
-      "LAB DATA — this learner's earlier results:",
-      ...input.priorSubmissions.map((s) => `- ${s.step}: ${JSON.stringify(s.deterministicResultJson ?? {})}`),
-    ].join("\n");
+    const labData = this.withTone(
+      [
+        "LAB DATA — release guidance (trusted, for your reasoning only; do not quote verbatim):",
+        input.guidance
+          ? `- recommended: ${input.guidance.recommendedDecision}\n- rationale: ${input.guidance.rationale}\n- typical conditions: ${input.guidance.suggestedConditions.join("; ")}`
+          : "- none recorded for this lab",
+        "",
+        "LAB DATA — this learner's earlier results:",
+        ...input.priorSubmissions.map((s) => `- ${s.step}: ${JSON.stringify(s.deterministicResultJson ?? {})}`),
+      ].join("\n"),
+      input.tone,
+    );
 
     const user = [
       labData,
@@ -263,6 +295,37 @@ export class AiService {
     return this.run("release_feedback", user, releaseFeedbackSchema, input.labId, secrets);
   }
 
+  /* --------------------------------------------- Custom Playground: author */
+
+  /**
+   * Authors one practice scenario from a learner's short intake prompt.
+   * `priorErrors`, when passed, means this is the one repair attempt allowed
+   * by PLAYGROUND_PROJECT.md — the caller (PlaygroundGenerationService) is
+   * responsible for calling this at most twice per job.
+   *
+   * `sessionId` is metadata only (there is no lab row for a generation call)
+   * so a slow/failed generation can still be traced in `ai_calls`.
+   */
+  async generateScenario(input: {
+    sessionId: string;
+    prompt: string;
+    difficulty?: GenerateScenarioRequest["difficulty"];
+    priorErrors?: string[];
+  }): Promise<AiResult<PlaygroundScenarioDraft>> {
+    const user = buildGeneratorUserPrompt(input);
+    return this.run(
+      "playground_scenario",
+      user,
+      playgroundScenarioDraftSchema,
+      input.sessionId,
+      [],
+      {
+        maxTokens: this.config.PLAYGROUND_GEN_MAX_OUTPUT_TOKENS,
+        budgetMs: this.config.PLAYGROUND_GEN_BUDGET_MS,
+      },
+    );
+  }
+
   /* ------------------------------------------------------------- engine */
 
   /**
@@ -271,7 +334,7 @@ export class AiService {
    * for every outcome (§20) and swallows all errors into a status.
    */
   private async run<T>(
-    task: keyof typeof PROMPTS,
+    task: TaskKey,
     userPrompt: string,
     // Input is `unknown` deliberately: with ZodSchema<T> the compiler unifies
     // T with the schema's *input* type, which makes every `.default([])` field
@@ -284,16 +347,19 @@ export class AiService {
      * see the redaction step after validation.
      */
     secrets: string[] = [],
+    /** Overrides for calls with a much larger/slower workload than coaching
+     *  (scenario generation) — omitted, coaching keeps its normal ceilings. */
+    opts: { maxTokens?: number; budgetMs?: number } = {},
   ): Promise<AiResult<T>> {
     if (!this.nim.configured) return { feedback: null, status: "unavailable" };
 
-    const prompt = PROMPTS[task];
+    const prompt = ALL_PROMPTS[task];
     const models = this.modelsFor(task);
 
     // One budget for the whole fallback chain. Without it, three models each
     // burning their own timeout meant a learner could wait minutes on a single
     // step; now the answer is already saved and the UI offers a retry instead.
-    const deadline = Date.now() + this.config.AI_TASK_BUDGET_MS;
+    const deadline = Date.now() + (opts.budgetMs ?? this.config.AI_TASK_BUDGET_MS);
 
     for (const [index, model] of models.entries()) {
       const started = Date.now();
@@ -309,6 +375,7 @@ export class AiService {
           system: prompt.system,
           user: this.truncate(userPrompt),
           deadline,
+          maxTokens: opts.maxTokens,
         });
 
         // extractJson can throw on unparseable output; treat that as this
@@ -369,7 +436,7 @@ export class AiService {
           fallbackDepth: index,
           redactions: redacted.redactions,
         });
-        return { feedback: redacted.value, status: "ok" };
+        return { feedback: redacted.value, status: "ok", model };
       } catch (err) {
         const code = err instanceof NimUnavailableError ? err.code : "UNKNOWN";
         await this.recordCall(task, model, prompt.version, "error", started, { labId, code });
@@ -385,7 +452,7 @@ export class AiService {
    * override, which is how a model that stops responding gets swapped without
    * a deploy.
    */
-  private modelsFor(task: keyof typeof PROMPTS): string[] {
+  private modelsFor(task: TaskKey): string[] {
     const reasoning = this.config.NVIDIA_NIM_MODEL_REASONING;
     const json = this.config.NVIDIA_NIM_MODEL_JSON;
     const fast = this.config.NVIDIA_NIM_MODEL_FAST;
@@ -405,7 +472,7 @@ export class AiService {
      * up anything it fails to produce, which keeps the quality ceiling without
      * making every learner pay for it.
      */
-    const byTask: Record<keyof typeof PROMPTS, string[]> = {
+    const byTask: Record<TaskKey, string[]> = {
       architecture_feedback: [fast, reasoning, json],
       threat_matching: [fast, reasoning, json],
       priority_feedback: [fast, reasoning, json],
@@ -420,9 +487,25 @@ export class AiService {
        * gaps). Worth ~6 s on one step in five; `fast` still backs it up.
        */
       release_feedback: [reasoning, fast, json],
+      /*
+       * Scenario generation is a different workload entirely: a full DFD +
+       * rubric in one shot, ~6-7k output tokens. Benchmarked against real
+       * prompts (see docs) — only nemotron-3-super-120b-a12b reliably returns
+       * a valid, complete scenario; gpt-oss-20b truncated into malformed JSON
+       * and gpt-oss-120b exceeded even a 3-minute budget. `json`/`fast` stay
+       * as a fallback in case the reasoning model is unavailable, not because
+       * they are expected to succeed.
+       */
+      playground_scenario: [reasoning, json, fast],
     };
     // Dedupe so an env var pointing two tiers at one model doesn't retry it.
     return [...new Set(byTask[task].filter(Boolean))];
+  }
+
+  /** Appends the softer-tone note to trusted LAB DATA — never to the system
+   *  prompt, so redactSecrets' system-prompt-line matching can't blank it. */
+  private withTone(labData: string, tone: CoachingTone | undefined): string {
+    return tone === "generated" ? `${labData}\n\n${GENERATED_RUBRIC_NOTE}` : labData;
   }
 
   /** Crude budget guard (§14). ~4 chars per token is close enough to cap cost. */

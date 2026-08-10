@@ -3,5 +3,6 @@ export * from "./schemas/dfd";
 export * from "./schemas/lab";
 export * from "./schemas/ai";
 export * from "./schemas/points";
+export * from "./schemas/playground";
 export * from "./api/index";
 export * from "./constants/index";

@@ -23,6 +23,8 @@ export function LabHeader({
   minutes,
   steps,
   currentIndex,
+  backHref = "/app/catalog",
+  categoryHref = `/app/catalog/${categorySlug}`,
 }: {
   title: string;
   categoryName: string;
@@ -31,6 +33,8 @@ export function LabHeader({
   minutes: number;
   steps: StepDef[];
   currentIndex: number;
+  backHref?: string;
+  categoryHref?: string;
 }) {
   return (
     <header
@@ -58,12 +62,12 @@ export function LabHeader({
             aria-label="Breadcrumb"
             style={{ display: "flex", alignItems: "center", gap: tokens.space(2), fontSize: tokens.size.sm }}
           >
-            <Link href="/app/catalog" style={{ color: tokens.color.textMuted, textDecoration: "none" }}>
+            <Link href={backHref} style={{ color: tokens.color.textMuted, textDecoration: "none" }}>
               Labs
             </Link>
             <span style={{ color: tokens.color.textFaint }}>/</span>
             <Link
-              href={`/app/catalog/${categorySlug}`}
+              href={categoryHref}
               style={{ color: tokens.color.textMuted, textDecoration: "none" }}
             >
               {categoryName}

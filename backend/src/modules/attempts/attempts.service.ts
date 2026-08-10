@@ -15,6 +15,13 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AiService } from "../ai/ai.service";
 import { PointsService, type PointCandidate } from "../points/points.service";
 import type { AuthContext } from "../../common/guards/session.guard";
+import {
+  assertKnownThreatIds,
+  assertStepAllowed,
+  comparePriorities,
+  gradeMitigations,
+  replayResult,
+} from "../../common/workflow";
 
 type SubmitOptions = { idempotencyKey?: string };
 
@@ -170,18 +177,6 @@ export class AttemptsService {
     return attempt;
   }
 
-  /**
-   * Steps must be done in order (§17). Re-submitting the *current* step is
-   * allowed — that is the retry path for step 2 — but skipping ahead is not.
-   */
-  private assertStepAllowed(current: LabStep, target: LabStep) {
-    const currentIdx = stepIndex(current);
-    const targetIdx = stepIndex(target);
-    if (targetIdx > currentIdx + 1) {
-      throw new BadRequestException("Finish the earlier steps first.");
-    }
-  }
-
   private async recordSubmission(
     attemptId: string,
     step: LabStep,
@@ -243,10 +238,10 @@ export class AttemptsService {
     options: SubmitOptions = {},
   ): Promise<StepResult> {
     const attempt = await this.loadForWrite(user, attemptId);
-    this.assertStepAllowed(attempt.currentStep, "architecture_issues");
+    assertStepAllowed(attempt.currentStep, "architecture_issues");
 
     const { submission, replayed } = await this.recordSubmission(attemptId, "architecture_issues", answer, options);
-    if (replayed) return this.replay(submission, attempt.currentStep);
+    if (replayed) return replayResult(submission, attempt.currentStep);
 
     const issues = await this.prisma.labArchitectureIssue.findMany({
       where: { labId: attempt.labId },
@@ -298,10 +293,10 @@ export class AttemptsService {
     options: SubmitOptions = {},
   ): Promise<StepResult> {
     const attempt = await this.loadForWrite(user, attemptId);
-    this.assertStepAllowed(attempt.currentStep, "threats");
+    assertStepAllowed(attempt.currentStep, "threats");
 
     const { submission, replayed } = await this.recordSubmission(attemptId, "threats", answer, options);
-    if (replayed) return this.replay(submission, attempt.currentStep);
+    if (replayed) return replayResult(submission, attempt.currentStep);
 
     const canonical = await this.prisma.labThreat.findMany({
       where: { labId: attempt.labId },
@@ -387,27 +382,16 @@ export class AttemptsService {
     options: SubmitOptions = {},
   ): Promise<StepResult> {
     const attempt = await this.loadForWrite(user, attemptId);
-    this.assertStepAllowed(attempt.currentStep, "prioritization");
+    assertStepAllowed(attempt.currentStep, "prioritization");
 
     const canonical = await this.prisma.labThreat.findMany({ where: { labId: attempt.labId } });
-    const known = new Set(canonical.map((t) => t.id));
-    // Reject ids that belong to another lab before storing anything.
-    const unknown = answer.items.filter((i) => !known.has(i.threatId));
-    if (unknown.length) throw new BadRequestException("Unknown threat in submission.");
+    assertKnownThreatIds(answer.items, new Set(canonical.map((t) => t.id)));
 
     const { submission, replayed } = await this.recordSubmission(attemptId, "prioritization", answer, options);
-    if (replayed) return this.replay(submission, attempt.currentStep);
+    if (replayed) return replayResult(submission, attempt.currentStep);
 
     const ai = await this.ai.priorityFeedback({ answer, canonical, labId: attempt.labId });
-    const comparison = answer.items.map((item) => {
-      const threat = canonical.find((t) => t.id === item.threatId)!;
-      return {
-        threatId: item.threatId,
-        learnerPriority: item.priority,
-        expectedPriority: threat.expectedPriority,
-        matches: item.priority === threat.expectedPriority,
-      };
-    });
+    const comparison = comparePriorities(answer.items, canonical);
 
     const done = await this.finish(attemptId, submission.id, "prioritization", ai, { comparison });
 
@@ -438,7 +422,7 @@ export class AttemptsService {
     options: SubmitOptions = {},
   ): Promise<StepResult> {
     const attempt = await this.loadForWrite(user, attemptId);
-    this.assertStepAllowed(attempt.currentStep, "mitigations");
+    assertStepAllowed(attempt.currentStep, "mitigations");
 
     const answerKey = await this.prisma.labThreatMitigation.findMany({
       where: { threat: { labId: attempt.labId } },
@@ -446,21 +430,12 @@ export class AttemptsService {
     });
 
     const { submission, replayed } = await this.recordSubmission(attemptId, "mitigations", answer, options);
-    if (replayed) return this.replay(submission, attempt.currentStep);
+    if (replayed) return replayResult(submission, attempt.currentStep);
 
     // §8 step 4: correctness is deterministic and computed BEFORE the AI runs.
     // The model explains this verdict; it never produces it.
-    const valid = new Set(answerKey.map((k) => `${k.threatId}:${k.mitigationId}`));
-    const graded = answer.pairings.map((p) => ({
-      threatId: p.threatId,
-      mitigationId: p.mitigationId,
-      isCorrect: valid.has(`${p.threatId}:${p.mitigationId}`),
-    }));
-    const deterministic = {
-      pairings: graded,
-      correctCount: graded.filter((g) => g.isCorrect).length,
-      totalCount: graded.length,
-    };
+    const deterministic = gradeMitigations(answer.pairings, answerKey);
+    const graded = deterministic.pairings;
 
     const ai = await this.ai.mitigationFeedback({ graded, answerKey, labId: attempt.labId });
     const done = await this.finish(attemptId, submission.id, "mitigations", ai, deterministic);
@@ -496,10 +471,10 @@ export class AttemptsService {
     options: SubmitOptions = {},
   ): Promise<StepResult> {
     const attempt = await this.loadForWrite(user, attemptId);
-    this.assertStepAllowed(attempt.currentStep, "release_decision");
+    assertStepAllowed(attempt.currentStep, "release_decision");
 
     const { submission, replayed } = await this.recordSubmission(attemptId, "release_decision", answer, options);
-    if (replayed) return this.replay(submission, attempt.currentStep);
+    if (replayed) return replayResult(submission, attempt.currentStep);
 
     const guidance = await this.prisma.labReleaseGuidance.findUnique({ where: { labId: attempt.labId } });
     const priorSubmissions = await this.prisma.labStepSubmission.findMany({

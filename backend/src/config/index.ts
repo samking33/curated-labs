@@ -43,6 +43,24 @@ const schema = z.object({
    * without Google credentials. Refused outside development — see below.
    */
   ALLOW_DEV_LOGIN: z.coerce.boolean().default(false),
+
+  /**
+   * Scenario generation is a distinct workload from coaching calls: it needs
+   * nemotron-3-super-120b-a12b specifically (benchmarked — it's the only
+   * candidate model that reliably returns a valid full scenario), which runs
+   * ~85s and ~6-7k output tokens, far past AI_TASK_BUDGET_MS/AI_MAX_OUTPUT_TOKENS.
+   * Hence separate budget/token ceilings, used only by generateScenario().
+   */
+  PLAYGROUND_GEN_MAX_OUTPUT_TOKENS: z.coerce.number().int().default(6000),
+  PLAYGROUND_GEN_BUDGET_MS: z.coerce.number().int().default(150000),
+
+  /** Rolling-window generation quotas, enforced by counting job rows. */
+  PLAYGROUND_GEN_PER_USER: z.coerce.number().int().default(10),
+  PLAYGROUND_GEN_PER_ORG: z.coerce.number().int().default(50),
+  PLAYGROUND_QUOTA_WINDOW_HOURS: z.coerce.number().int().default(24),
+
+  /** A job stuck "running" past this long is reaped back to "failed". */
+  PLAYGROUND_STALE_JOB_MS: z.coerce.number().int().default(300000),
 });
 
 export type AppConfig = z.infer<typeof schema> & {

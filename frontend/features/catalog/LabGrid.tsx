@@ -2,16 +2,25 @@ import Link from "next/link";
 import type { LabSummary } from "@curated-labs/shared";
 import { tokens } from "@/lib/tokens";
 
-export function LabGrid({ labs }: { labs: LabSummary[] }) {
+export function LabGrid({
+  labs,
+  hrefBase = "/app/labs",
+  emptyLabel = "No labs published yet.",
+}: {
+  labs: LabSummary[];
+  /** Playground: "/app/playground" — scenarios have no slug routing, so `lab.slug` is the scenario id. */
+  hrefBase?: string;
+  emptyLabel?: string;
+}) {
   if (labs.length === 0) {
-    return <p style={{ color: tokens.color.textMuted }}>No labs published yet.</p>;
+    return <p style={{ color: tokens.color.textMuted }}>{emptyLabel}</p>;
   }
   return (
     <ul style={{ listStyle: "none", padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: tokens.space(4) }}>
       {labs.map((lab) => (
         <li key={lab.id}>
           <Link
-            href={`/app/labs/${lab.slug}`}
+            href={`${hrefBase}/${lab.slug}`}
             style={{
               display: "block",
               height: "100%",

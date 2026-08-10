@@ -109,6 +109,7 @@ enum AiTaskType {
   mitigation_feedback
   release_feedback
   model_smoke_test
+  playground_scenario
 
   @@map("ai_task_type")
 }
@@ -139,15 +140,19 @@ model User {
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   platformRoles       UserPlatformRole[]
-  ownedOrganizations  Organization[]           @relation("OrganizationOwner")
+  ownedOrganizations  Organization[]                @relation("OrganizationOwner")
   memberships         OrganizationMembership[]
   departmentMembers   DepartmentMembership[]
-  invitationsSent     Invitation[]             @relation("InvitedBy")
-  invitationsAccepted Invitation[]             @relation("AcceptedBy")
+  invitationsSent     Invitation[]                  @relation("InvitedBy")
+  invitationsAccepted Invitation[]                  @relation("AcceptedBy")
   attempts            LabAttempt[]
   sessions            Session[]
   auditLogs           AuditLog[]
   pointEvents         PointEvent[]
+  playgroundSessions  PlaygroundSession[]
+  playgroundJobs      PlaygroundGenerationJob[]
+  playgroundScenarios PlaygroundGeneratedScenario[]
+  playgroundAttempts  PlaygroundAttempt[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
@@ -193,13 +198,15 @@ model Organization {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  owner       User?                    @relation("OrganizationOwner", fields: [ownerUserId], references: [id])
-  departments Department[]
-  memberships OrganizationMembership[]
-  invitations Invitation[]
-  attempts    LabAttempt[]
-  auditLogs   AuditLog[]
-  pointEvents PointEvent[]
+  owner              User?                    @relation("OrganizationOwner", fields: [ownerUserId], references: [id])
+  departments        Department[]
+  memberships        OrganizationMembership[]
+  invitations        Invitation[]
+  attempts           LabAttempt[]
+  auditLogs          AuditLog[]
+  pointEvents        PointEvent[]
+  playgroundSessions PlaygroundSession[]
+  playgroundAttempts PlaygroundAttempt[]
 
   @@index([slug], map: "idx_organizations_slug")
   @@map("organizations")
@@ -604,4 +611,137 @@ model AuditLog {
   @@index([actorUserId], map: "idx_audit_logs_actor")
   @@index([organizationId, createdAt(sort: Desc)], map: "idx_audit_logs_org_created")
   @@map("audit_logs")
+}
+
+/// Custom Playground (PLAYGROUND_PROJECT.md). AI-generated practice scenarios,
+/// deliberately kept in their own tables rather than polymorphic rows on the
+/// curated ones: an AI-authored answer key must never be reachable through the
+/// curated catalog, the leaderboard, or org progress reporting, and separate
+/// tables make that structurally true instead of a WHERE clause someone has
+/// to remember. See backend/src/modules/playground/ for the service layer and
+/// backend/src/common/workflow.ts for the pure grading logic shared with
+/// curated attempts.
+enum PlaygroundJobStatus {
+  queued
+  running
+  succeeded
+  failed
+
+  @@map("playground_job_status")
+}
+
+model PlaygroundSession {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  title          String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization?                 @relation(fields: [organizationId], references: [id])
+  jobs         PlaygroundGenerationJob[]
+  scenarios    PlaygroundGeneratedScenario[]
+
+  @@index([userId, createdAt], map: "idx_playground_sessions_user")
+  @@map("playground_sessions")
+}
+
+model PlaygroundGenerationJob {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId      String              @map("session_id") @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  organizationId String?             @map("organization_id") @db.Uuid
+  status         PlaygroundJobStatus @default(queued)
+  /// Untrusted learner text, stored verbatim for audit. Never rendered as HTML,
+  /// never logged in full in production (§20 mirrors curated AI logging rules).
+  prompt         String
+  /// Learner-safe text ONLY — never model output, never the validator's error
+  /// list. Those are logged server-side and discarded, not persisted here.
+  errorMessage   String?             @map("error_message")
+  idempotencyKey String?             @map("idempotency_key")
+  startedAt      DateTime?           @map("started_at") @db.Timestamptz(6)
+  finishedAt     DateTime?           @map("finished_at") @db.Timestamptz(6)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session  PlaygroundSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user     User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenario PlaygroundGeneratedScenario?
+
+  @@unique([userId, idempotencyKey])
+  /// These two indexes ARE the quota mechanism: PlaygroundGenerationService
+  /// counts rows in a time window rather than maintaining a separate counter.
+  @@index([userId, createdAt], map: "idx_playground_jobs_user_created")
+  @@index([organizationId, createdAt], map: "idx_playground_jobs_org_created")
+  @@map("playground_generation_jobs")
+}
+
+model PlaygroundGeneratedScenario {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId     String   @map("session_id") @db.Uuid
+  jobId         String   @unique @map("job_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  /// Denormalised so the scenario list doesn't have to parse every JSONB blob.
+  title         String
+  /// The whole scenario INCLUDING the answer key, with real UUIDs already
+  /// minted for every author-supplied key. SERVER-ONLY: the learner-facing
+  /// payload is a projection of this shaped as LabDetail, which has no field
+  /// for threats or the mitigation mapping — leaking one is a compile error,
+  /// not a review comment (see shared/src/api/index.ts's LabDetail comment).
+  contentJson   Json     @map("content_json")
+  modelId       String   @map("model_id")
+  promptVersion String   @map("prompt_version")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session  PlaygroundSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  job      PlaygroundGenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user     User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts PlaygroundAttempt[]
+
+  @@index([userId, createdAt], map: "idx_playground_scenarios_user")
+  @@index([sessionId], map: "idx_playground_scenarios_session")
+  @@map("playground_generated_scenarios")
+}
+
+model PlaygroundAttempt {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scenarioId     String        @map("scenario_id") @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  status         AttemptStatus @default(in_progress)
+  currentStep    LabStep       @default(intro) @map("current_step")
+  startedAt      DateTime      @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt    DateTime?     @map("completed_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  scenario     PlaygroundGeneratedScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  user         User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization?               @relation(fields: [organizationId], references: [id])
+  submissions  PlaygroundStepSubmission[]
+
+  @@index([userId], map: "idx_playground_attempts_user")
+  @@index([scenarioId, userId], map: "idx_playground_attempts_scenario_user")
+  @@map("playground_attempts")
+}
+
+model PlaygroundStepSubmission {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attemptId               String   @map("attempt_id") @db.Uuid
+  step                    LabStep
+  attemptNumber           Int      @default(1) @map("attempt_number")
+  answerJson              Json     @map("answer_json")
+  aiFeedbackJson          Json?    @map("ai_feedback_json")
+  deterministicResultJson Json?    @map("deterministic_result_json")
+  /// §25 idempotency — mirrors lab_step_submissions exactly.
+  idempotencyKey          String?  @map("idempotency_key")
+  submittedAt             DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  attempt PlaygroundAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, idempotencyKey])
+  @@index([attemptId, step], map: "idx_playground_step_submissions_attempt_step")
+  @@map("playground_step_submissions")
 }

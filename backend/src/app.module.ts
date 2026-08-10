@@ -13,6 +13,7 @@ import { AttemptsModule } from "./modules/attempts/attempts.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { PointsModule } from "./modules/points/points.module";
 import { HealthModule } from "./modules/health/health.module";
+import { PlaygroundModule } from "./modules/playground/playground.module";
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { HealthModule } from "./modules/health/health.module";
     AttemptsModule,
     OrganizationsModule,
     PointsModule,
+    PlaygroundModule,
     HealthModule,
   ],
   providers: [

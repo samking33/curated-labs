@@ -27,6 +27,7 @@ export function AppNav({ me }: { me: MeResponse }) {
         Securacy
       </Link>
       <NavLink href="/app/catalog">Catalog</NavLink>
+      <NavLink href="/app/playground">Playground</NavLink>
       {org && <NavLink href={`/app/org/${org.slug}`}>{org.name}</NavLink>}
       <NavLink href="/app/settings">Settings</NavLink>
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: tokens.space(3) }}>

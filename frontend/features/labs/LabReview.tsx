@@ -28,14 +28,14 @@ const STEP_TITLE: Partial<Record<LabStep, string>> = {
  * whole attempt back together: what they answered, what the coach said, and how
  * their priorities lined up against the curated expectations.
  */
-export function LabReview({ attemptId }: { attemptId: string }) {
+export function LabReview({ attemptId, attemptBase = "/attempts" }: { attemptId: string; attemptBase?: string }) {
   const [submissions, setSubmissions] = useState<Submission[] | null>(null);
   const [threats, setThreats] = useState<{ id: string; title: string; expectedPriority: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    api<{ submissions: Submission[]; revealedThreats: typeof threats | null }>(`/attempts/${attemptId}`)
+    api<{ submissions: Submission[]; revealedThreats: typeof threats | null }>(`${attemptBase}/${attemptId}`)
       .then((a) => {
         if (cancelled) return;
         setSubmissions(a.submissions);
@@ -45,7 +45,7 @@ export function LabReview({ attemptId }: { attemptId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [attemptId]);
+  }, [attemptId, attemptBase]);
 
   if (error) return <Card>{error}</Card>;
   if (!submissions) return <Card><Spinner label="Loading your answers…" /></Card>;

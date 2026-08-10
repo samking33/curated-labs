@@ -17,6 +17,7 @@ export const AI_TASK_TYPES = [
   "mitigation_feedback",
   "release_feedback",
   "model_smoke_test",
+  "playground_scenario",
 ] as const;
 export const aiTaskTypeSchema = z.enum(AI_TASK_TYPES);
 export type AiTaskType = z.infer<typeof aiTaskTypeSchema>;
