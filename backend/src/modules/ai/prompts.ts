@@ -188,7 +188,7 @@ Return JSON matching exactly this shape:
   "dfd": {
     "version": "1.0",
     "nodes": [{ "id": string, "type": "external_entity" | "process" | "data_store" | "service" | "queue" | "third_party" | "trust_boundary",
-                "label": string, "description": string, "trustBoundary"?: string, "assets": string[] }],
+                "label": string, "description": string, "trustBoundary"?: string, "provider"?: "aws" | "azure" | "gcp", "assets": string[] }],
     "edges": [{ "id": string, "source": string, "target": string, "label": string, "protocol": string,
                 "data": string[], "trustBoundaryCrossing": boolean }],
     "trustBoundaries": [{ "id": string, "label": string, "description": string }]
@@ -210,7 +210,14 @@ Size requirements (violating any of these gets the whole scenario rejected):
 - dfd.edges: ${SCENARIO_BOUNDS.edges[0]}-${SCENARIO_BOUNDS.edges[1]}
 - threats: ${SCENARIO_BOUNDS.threats[0]}-${SCENARIO_BOUNDS.threats[1]}
 - mitigations: ${SCENARIO_BOUNDS.mitigations[0]}-${SCENARIO_BOUNDS.mitigations[1]}
-- architectureIssues: ${SCENARIO_BOUNDS.architectureIssues[0]}-${SCENARIO_BOUNDS.architectureIssues[1]}`,
+- architectureIssues: ${SCENARIO_BOUNDS.architectureIssues[0]}-${SCENARIO_BOUNDS.architectureIssues[1]}
+
+Per-field authoring rules:
+- "provider" on a node is OPTIONAL and applies only to process/service/data_store/queue nodes.
+  Set it ONLY when the learner's own description explicitly names a specific cloud vendor
+  (e.g. they wrote "AWS", "Azure", "GCP", "Google Cloud", or a named vendor service like "S3"
+  or "Lambda"). Never set it from generic cues like "the cloud" or "serverless" — those
+  describe a pattern, not a vendor, and get no provider. When in doubt, leave it unset.`,
   },
 } as const;
 
