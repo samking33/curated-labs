@@ -77,24 +77,49 @@ docs/superpowers/plans/2026-08-11-dfd-provider-icons.md.
   `mxgraph.azure.storage_queue` stencil shape does still exist and is still
   searchable — confirmed it surfaces for "Storage Queue" — but was not used,
   for consistency with the other three Azure picks.)
-- **GCP `process` / `data_store`**: used the newer `gcp3` stencil library
-  (`shape=mxgraph.gcp3.computeengine`, `shape=mxgraph.gcp3.cloudsql`)
-  instead of `gcp2`, because `gcp3` renders as a plain named `shape=`
-  reference (consistent with the AWS4 pattern) rather than an embedded
-  base64 SVG. `gcp3` only has a handful of shapes (`computeengine`,
-  `cloudsql`, `cloud_storage`, `storage` — grepped from `app.min.js`), so it
-  doesn't cover `service` or `queue`.
-- **GCP `service` / `queue`**: `gcp3` has no Cloud Functions or Pub/Sub
-  shape, so these fall back to the `gcp2` library's image-shape style
-  (`shape=image;...;image=data:image/svg+xml,<base64>;`) — this is how
-  *all* gcp2 icons are expressed in this bundle (embedded data URIs, not
-  file paths like azure2 or named stencils like aws4/gcp3), confirmed by
-  inspecting several other gcp2 search results during investigation.
-- All four AWS picks and both `gcp3` picks are simple single-part icons.
-  Both Azure and the two `gcp2` picks (`Cloud Functions`, `Pub/Sub`) are
-  also single-part `image` shapes, just with different underlying image
-  encodings (file path vs. embedded data URI) — none of the 12 are
-  multi-part/grouped diagrams.
+- **GCP `process` / `data_store` / `service`**: used the newer `gcp3`
+  stencil library (`shape=mxgraph.gcp3.computeengine`,
+  `shape=mxgraph.gcp3.cloudsql`, `shape=mxgraph.gcp3.cloudrun`) instead of
+  `gcp2`, because `gcp3` renders as a plain named `shape=` reference
+  (consistent with the AWS4 pattern) rather than an embedded base64 SVG.
+  **Correction from an earlier draft of this doc**: `gcp3` is not a small
+  library — grepping `gcp3\.[a-zA-Z_]+` in `app.min.js` finds 46 named
+  shapes (`computeengine`, `cloudsql`, `cloudrun`, `serverlesscomputing`,
+  `gke`, `bigquery`, `apigee`, `alloydb`, ... — a full modern icon set), not
+  "a handful". A code-review pass caught this and asked for a live
+  re-check specifically for a `service`-shaped candidate; searching "Cloud
+  Run" and "Serverless Computing" live in the editor and reading their
+  captured styles via Edit Style confirmed both exist as clean
+  `shape=mxgraph.gcp3.<name>` stencils
+  (`sketch=0;html=1;...;shape=mxgraph.gcp3.cloudrun;fillColor=#4285f4` and
+  `...;shape=mxgraph.gcp3.serverlesscomputing;fillColor=#9aa0a6`
+  respectively — both screenshotted rendering as real, non-blank icons at
+  `scratchpad/pw2/candidates-full.png` in this run's temp dir). `cloudrun`
+  was chosen over `serverlesscomputing` for the `service` row: it's a
+  distinct, official, immediately-recognizable Google product mark (a
+  three-color chevron/play glyph, confirmed at 4x zoom in
+  `scratchpad/pw2/cloudrun-zoom.png`), it uses `fillColor=#4285f4` — the
+  same GCP blue as the `computeengine` and `cloudsql` picks already used
+  for `process`/`data_store`, keeping all three GCP icons visually
+  consistent — and semantically "Cloud Run" (a managed serverless
+  container/service platform) is a more literal match for a generic
+  "service" DFD node than "Serverless Computing", which renders as a
+  generic gray (`fillColor=#9aa0a6`, an odd color one out next to the blue
+  process/data_store icons) cloud-with-refresh-arrows glyph that isn't tied
+  to a specific recognizable product.
+- **GCP `queue`**: `gcp3`'s 46 shapes (re-confirmed above) still don't
+  include a Pub/Sub or generic queue/messaging/topic icon — re-grepped
+  `gcp3\.[a-zA-Z_]+` output for `pubsub|queue|messag|topic|event` and found
+  no match. So `queue` still falls back to the `gcp2` library's image-shape
+  style (`shape=image;...;image=data:image/svg+xml,<base64>;`) — this is
+  how *all* gcp2 icons are expressed in this bundle (embedded data URIs,
+  not file paths like azure2 or named stencils like aws4/gcp3), confirmed
+  by inspecting several other gcp2 search results during investigation.
+- All four AWS picks and all three `gcp3` picks (`process`, `data_store`,
+  `service`) are simple single-part icons. Azure and the one remaining
+  `gcp2` pick (`queue` / Pub/Sub) are also single-part `image` shapes, just
+  with different underlying image encodings (file path vs. embedded data
+  URI) — none of the 12 are multi-part/grouped diagrams.
 
 ## Style strings
 
@@ -109,7 +134,7 @@ docs/superpowers/plans/2026-08-11-dfd-provider-icons.md.
 | azure | data_store | `image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/SQL_Database.svg;` |
 | azure | queue | `image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/general/Storage_Queue.svg;` |
 | gcp | process | `sketch=0;html=1;verticalAlign=top;labelPosition=center;verticalLabelPosition=bottom;align=center;fontSize=11;fontStyle=0;fontColor=#000000;aspect=fixed;pointerEvents=1;shape=mxgraph.gcp3.computeengine;fillColor=#4285f4` |
-| gcp | service | `editableCssRules=.*;html=1;shape=image;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;aspect=fixed;imageAspect=0;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjIwIiBoZWlnaHQ9IjE5Ljk4OTk5OTc3MTExODE2NCIgdmlld0JveD0iMCAwIDIwIDE5Ljk4OTk5OTc3MTExODE2NCI+JiN4YTsJPHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiM2NjlkZjY7fSYjeGE7CS5zdDJ7ZmlsbDojYWVjYmZhO30mI3hhOwk8L3N0eWxlPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0zIDMuOTlMMCA2LjQydjcuMTNsMyAyLjQ0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zIDMuOTlsLTMgNCAzLTJ6bS0zIDhsMyA0di0yeiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0wIDE1Ljk5bDQgNCAyLTItNi02em0uMDEtOEw1Ljk5IDJsLTItMkwwIDMuOTl6Ii8+JiN4YTsJPHBhdGggY2xhc3M9InN0MSIgZD0iTTE3IDE2bDMtMi40MlY2LjQ0TDE3IDR6Ii8+JiN4YTsJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE3IDE2bDMtNC0zIDJ6bTMtOGwtMy00djJ6Ii8+JiN4YTsJPGcgY2xhc3M9InN0MiI+JiN4YTsJCTxwYXRoIGQ9Ik0yMCA0bC00LTQtMiAyIDYgNnptLS4wMSA4bC01Ljk4IDUuOTkgMiAyTDIwIDE2eiIvPiYjeGE7CQk8Y2lyY2xlIGN4PSI2IiBjeT0iOS45OSIgcj0iMSIvPiYjeGE7CQk8Y2lyY2xlIGN4PSIxMCIgY3k9IjkuOTkiIHI9IjEiLz4mI3hhOwkJPGNpcmNsZSBjeD0iMTMuOTkiIGN5PSI5Ljk5IiByPSIxIi8+JiN4YTsJPC9nPiYjeGE7PC9zdmc+;` |
+| gcp | service | `sketch=0;html=1;verticalAlign=top;labelPosition=center;verticalLabelPosition=bottom;align=center;fontSize=11;fontStyle=0;fontColor=#000000;aspect=fixed;pointerEvents=1;shape=mxgraph.gcp3.cloudrun;fillColor=#4285f4` |
 | gcp | data_store | `sketch=0;html=1;verticalAlign=top;labelPosition=center;verticalLabelPosition=bottom;align=center;fontSize=11;fontStyle=0;fontColor=#000000;aspect=fixed;pointerEvents=1;shape=mxgraph.gcp3.cloudsql;fillColor=#4285f4` |
 | gcp | queue | `editableCssRules=.*;html=1;shape=image;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;aspect=fixed;imageAspect=0;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjE4LjMxOTk5OTY5NDgyNDIyIiBoZWlnaHQ9IjIwLjAwMDAwMTkwNzM0ODYzMyIgdmlld0JveD0iMCAwIDE4LjMxOTk5OTY5NDgyNDIyIDIwLjAwMDAwMTkwNzM0ODYzMyI+JiN4YTsJPHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzY2OWRmNjt9JiN4YTsJLnN0MXtmaWxsOiM0Mjg1ZjQ7fSYjeGE7CS5zdDJ7ZmlsbDojYWVjYmZhO30mI3hhOwk8L3N0eWxlPiYjeGE7CTxkZWZzPiYjeGE7CQk8ZmlsdGVyIGlkPSJBIiB4PSI0LjY0IiB5PSI0LjE5IiB3aWR0aD0iMTQuNzMiIGhlaWdodD0iMTIuNzYiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzPSJzUkdCIj4mI3hhOwkJCTxmZUZsb29kIGZsb29kLWNvbG9yPSIjZmZmIi8+JiN4YTsJCQk8ZmVCbGVuZCBpbj0iU291cmNlR3JhcGhpYyIvPiYjeGE7CQk8L2ZpbHRlcj4mI3hhOwkJPG1hc2sgaWQ9IkIiIHg9IjQuNjQiIHk9IjQuMTkiIHdpZHRoPSIxNC43MyIgaGVpZ2h0PSIxMi43NiIgbWFza1VuaXRzPSJ1c2VyU3BhY2VPblVzZSI+JiN4YTsJCQk8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyLjIzIiByPSIzLjU4IiBmaWx0ZXI9InVybCgjQSkiLz4mI3hhOwkJPC9tYXNrPiYjeGE7CTwvZGVmcz4mI3hhOwk8ZyBjbGFzcz0ic3QwIj4mI3hhOwkJPGNpcmNsZSBjeD0iMTYuMTMiIGN5PSI2LjIxIiByPSIxLjcyIi8+JiN4YTsJCTxjaXJjbGUgY3g9IjIuMTkiIGN5PSI2LjIxIiByPSIxLjcyIi8+JiN4YTsJCTxjaXJjbGUgY3g9IjkuMTYiIGN5PSIxOC4yOCIgcj0iMS43MiIvPiYjeGE7CTwvZz4mI3hhOwk8ZyBtYXNrPSJ1cmwoI0IpIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMi44NCAtMikiPiYjeGE7CQk8cGF0aCB0cmFuc2Zvcm09Im1hdHJpeCguNSAtLjg3IC44NyAuNSAtNC41OSAyMC41MykiIGQ9Ik0xNC42OSAxMC4yMmgxLjU5djguMDRoLTEuNTl6IiBjbGFzcz0ic3QxIi8+JiN4YTsJCTxwYXRoIHRyYW5zZm9ybT0icm90YXRlKDMzMCA4LjUyMyAxNC4yNDQpIiBkPSJNNC40OSAxMy40NWg4LjA0djEuNTlINC40OXoiIGNsYXNzPSJzdDEiLz4mI3hhOwkJPHBhdGggZD0iTTExLjIgNC4xOWgxLjU5djguMDRIMTEuMnoiIGNsYXNzPSJzdDEiLz4mI3hhOwk8L2c+JiN4YTsJPGcgY2xhc3M9InN0MiI+JiN4YTsJCTxjaXJjbGUgY3g9IjkuMTYiIGN5PSIxMC4yMyIgcj0iMi43OCIvPiYjeGE7CQk8Y2lyY2xlIGN4PSIyLjE5IiBjeT0iMTQuMjUiIHI9IjIuMTkiLz4mI3hhOwkJPGNpcmNsZSBjeD0iMTYuMTMiIGN5PSIxNC4yNSIgcj0iMi4xOSIvPiYjeGE7CQk8Y2lyY2xlIGN4PSI5LjE2IiBjeT0iMi4xOSIgcj0iMi4xOSIvPiYjeGE7CTwvZz4mI3hhOzwvc3ZnPg==;` |
 
@@ -117,9 +142,9 @@ All 12 were placed on a live canvas simultaneously and visually confirmed to
 render as real, non-blank icons (screenshot taken during verification, not
 committed — it's throwaway scratch output).
 
-Note the two `gcp3` styles (`process`, `data_store`) end without a trailing
-`;` — that's exactly what the live Edit Style dialog showed, not a
-transcription artifact of this doc.
+Note the three `gcp3` styles (`process`, `data_store`, `service`) end
+without a trailing `;` — that's exactly what the live Edit Style dialog
+showed, not a transcription artifact of this doc.
 
 ## libs= format
 
