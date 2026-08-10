@@ -36,6 +36,7 @@ export default async function PlaygroundScenarioPage({
         startPath={`/playground/scenarios/${scenario.id}/attempts`}
         attemptBase="/playground/attempts"
         backHref="/app/playground"
+        dfdSavePath={`/playground/scenarios/${scenario.id}/dfd`}
       />
     </>
   );

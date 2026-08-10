@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { THREAT_RETRY_LIMIT, type DfdSelection, type LabDetail, type LabStep, type StepResult } from "@curated-labs/shared";
-import { DfdViewer } from "@/features/dfd/DfdViewer";
+import { DfdEditorFrame } from "@/features/dfd-editor/DfdEditorFrame";
 import { api, ApiRequestError, newIdempotencyKey } from "@/lib/api";
 import { tokens } from "@/lib/tokens";
 import { Alert, Button, Card } from "@/components/ui";
@@ -50,12 +50,18 @@ export function LabShell({
   attemptBase = "/attempts",
   /** Breadcrumb + completion-card target. Playground: "/app/playground". */
   backHref = "/app/catalog",
+  /** Present only for an unaccepted Playground scenario review. When set,
+   *  the DFD panel is editable (until an attempt exists) and PATCHes here
+   *  on save. Omitted for curated labs and already-started attempts, where
+   *  the panel is always view-only. */
+  dfdSavePath,
 }: {
   lab: LabDetail;
   attemptId?: string;
   startPath?: string;
   attemptBase?: string;
   backHref?: string;
+  dfdSavePath?: string;
 }) {
   const [attemptId, setAttemptId] = useState<string | undefined>(initialAttemptId);
   const [step, setStep] = useState<LabStep>("intro");
@@ -337,7 +343,18 @@ export function LabShell({
             border: `1px solid ${tokens.color.border}`,
           }}
         >
-          <DfdViewer graph={lab.dfd} onSelectionChange={setSelection} />
+          <DfdEditorFrame
+            graph={lab.dfd}
+            mode={dfdSavePath && !attemptId ? "edit" : "view"}
+            onSelectionChange={setSelection}
+            onSave={
+              dfdSavePath
+                ? async (xml) => {
+                    await api(dfdSavePath, { method: "PATCH", body: JSON.stringify({ drawioXml: xml }) });
+                  }
+                : undefined
+            }
+          />
         </section>
 
         <div style={{ display: "grid", gap: tokens.space(4), alignContent: "start", minWidth: 0 }}>
