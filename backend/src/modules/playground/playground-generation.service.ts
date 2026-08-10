@@ -1,7 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { HttpException, HttpStatus, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
-  dfdGraphSchema,
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import {
+  checkDfdReferences,
+  compileToDrawioXml,
+  extractFromDrawioXml,
   isUuid,
   playgroundScenarioContentSchema,
   validateGeneratedScenario,
@@ -216,9 +226,9 @@ export class PlaygroundGenerationService {
     // Author keys are discarded here — the learner-facing submission schemas
     // require z.string().uuid(), so downstream code speaks the same id
     // dialect as a curated lab regardless of how this scenario was authored.
+    const dfdXml = compileToDrawioXml(draft.dfd);
     const content: PlaygroundScenarioContent = playgroundScenarioContentSchema.parse({
       lab: draft.lab,
-      dfd: draft.dfd,
       architectureIssues: draft.architectureIssues.map((i) => ({
         id: issueId.get(i.key),
         title: i.title,
@@ -262,6 +272,7 @@ export class PlaygroundGenerationService {
           userId: job.userId,
           title: content.lab.title,
           contentJson: content as object,
+          dfdXml,
           modelId,
           promptVersion: AUTHOR_PROMPT_VERSION,
         },
@@ -332,7 +343,7 @@ export class PlaygroundGenerationService {
       version: 1,
       category: { id: "playground", name: "Playground", slug: "playground" },
       // Re-parse on the way out: it came from a language model, not a curator.
-      dfd: dfdGraphSchema.parse(content.dfd),
+      dfd: extractFromDrawioXml(scenario.dfdXml),
       dfdVersion: 1,
       mitigationOptions: content.mitigations.map(({ id, title, description }) => ({ id, title, description })),
       attempt: attempt ?? null,
@@ -352,6 +363,43 @@ export class PlaygroundGenerationService {
       throw new NotFoundException("Scenario not found.");
     }
     return playgroundScenarioContentSchema.parse(scenario.contentJson);
+  }
+
+  /** Owner-only. Re-validates that every threat/architecture-issue reference
+   *  still resolves before accepting the edit — the same referential-integrity
+   *  bar validateGeneratedScenario applies at generation time, re-applied here
+   *  because the learner can now change the DFD after generation. */
+  async updateScenarioDfd(user: AuthContext, scenarioId: string, drawioXml: string): Promise<void> {
+    const scenario = await this.prisma.playgroundGeneratedScenario.findUnique({ where: { id: scenarioId } });
+    if (!scenario || scenario.userId !== user.userId) throw new NotFoundException("Scenario not found.");
+
+    let graph;
+    try {
+      graph = extractFromDrawioXml(drawioXml);
+    } catch {
+      throw new BadRequestException("Couldn't read that diagram.");
+    }
+
+    const content = playgroundScenarioContentSchema.parse(scenario.contentJson);
+    const errors = checkDfdReferences(graph, [
+      ...content.architectureIssues.map((i) => ({
+        label: `architecture issue "${i.title}"`,
+        affectedNodeIds: i.affectedNodeIds,
+        affectedEdgeIds: i.affectedEdgeIds,
+      })),
+      ...content.threats.map((t) => ({
+        label: `threat "${t.title}"`,
+        affectedNodeIds: t.affectedNodeIds,
+        affectedEdgeIds: t.affectedEdgeIds,
+      })),
+    ]);
+    if (errors.length) {
+      throw new BadRequestException(`That edit removes something a threat or issue still points at: ${errors[0]}`);
+    }
+
+    // Prisma field is `dfdXml` on this model (LabDfd's is `drawioXml` — the two
+    // models were named independently in Task 5; don't cross the names).
+    await this.prisma.playgroundGeneratedScenario.update({ where: { id: scenarioId }, data: { dfdXml: drawioXml } });
   }
 
   private toJob(job: {

@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { BadRequestException, ForbiddenException, HttpException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
-import { THREAT_RETRY_LIMIT } from "@curated-labs/shared";
+import { compileToDrawioXml, dfdGraphSchema, THREAT_RETRY_LIMIT } from "@curated-labs/shared";
 import { PlaygroundGenerationService } from "../src/modules/playground/playground-generation.service";
 import { PlaygroundAttemptsService } from "../src/modules/playground/playground-attempts.service";
 import { PlaygroundController } from "../src/modules/playground/playground.controller";
@@ -404,7 +404,14 @@ describe("answer-key leakage", () => {
   it("never serializes threat/mitigation answer-key fields into getScenario()", async () => {
     const { prisma, stores } = makeStubPrisma();
     const scenarioId = randomUUID();
-    stores.scenarios.set(scenarioId, { id: scenarioId, userId: "userA", contentJson: makeScenarioContent(), title: "x" });
+    const content = makeScenarioContent();
+    stores.scenarios.set(scenarioId, {
+      id: scenarioId,
+      userId: "userA",
+      contentJson: content,
+      dfdXml: compileToDrawioXml(dfdGraphSchema.parse(content.dfd)),
+      title: "x",
+    });
 
     const generation = new PlaygroundGenerationService(prisma, makeStubAi() as any, stubAudit as any, stubConfig);
     const detail = await generation.getScenario(makeUser("userA"), scenarioId);

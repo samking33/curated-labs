@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Patch, Post } from "@nestjs/common";
 import { z } from "zod";
 import { generateScenarioRequestSchema } from "@curated-labs/shared";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -7,6 +7,7 @@ import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { PlaygroundGenerationService } from "./playground-generation.service";
 
 const createSessionSchema = z.object({ title: z.string().min(1).max(200) });
+const updateDfdSchema = z.object({ drawioXml: z.string().min(1) });
 
 // No @Public() anywhere — SessionGuard (APP_GUARD) closes every route here
 // and enforces CSRF on the mutations, with zero extra wiring.
@@ -55,5 +56,14 @@ export class PlaygroundController {
   @Get("scenarios/:scenarioId")
   scenario(@CurrentUser() user: AuthContext, @Param("scenarioId") scenarioId: string) {
     return this.generation.getScenario(user, scenarioId);
+  }
+
+  @Patch("scenarios/:scenarioId/dfd")
+  updateDfd(
+    @CurrentUser() user: AuthContext,
+    @Param("scenarioId") scenarioId: string,
+    @Body(new ZodValidationPipe(updateDfdSchema)) body: { drawioXml: string },
+  ) {
+    return this.generation.updateScenarioDfd(user, scenarioId, body.drawioXml);
   }
 }
