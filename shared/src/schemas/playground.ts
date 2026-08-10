@@ -7,7 +7,6 @@ import {
   validateSeedReferences,
   type LabSeed,
 } from "./lab";
-import { dfdGraphSchema } from "./dfd";
 
 /**
  * Custom Playground contracts (PLAYGROUND_PROJECT.md).
@@ -73,7 +72,6 @@ export const playgroundScenarioContentSchema = z.object({
     difficulty: labDifficultySchema,
     estimatedMinutes: z.number().int().positive(),
   }),
-  dfd: dfdGraphSchema,
   architectureIssues: z.array(
     z.object({
       id: z.string().uuid(),

@@ -349,7 +349,7 @@ model LabDfd {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   labId           String   @map("lab_id") @db.Uuid
   version         Int      @default(1)
-  graphJson       Json     @map("graph_json")
+  drawioXml       String   @map("drawio_xml")
   previewAssetUrl String?  @map("preview_asset_url")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -690,6 +690,7 @@ model PlaygroundGeneratedScenario {
   /// for threats or the mitigation mapping — leaking one is a compile error,
   /// not a review comment (see shared/src/api/index.ts's LabDetail comment).
   contentJson   Json     @map("content_json")
+  dfdXml        String   @map("dfd_xml")
   modelId       String   @map("model_id")
   promptVersion String   @map("prompt_version")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
