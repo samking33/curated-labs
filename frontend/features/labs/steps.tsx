@@ -407,14 +407,21 @@ function RefPicker({
   onClear: () => void;
 }) {
   const total = refs.nodes.length + refs.edges.length;
+  // The embedded draw.io editor never emits the "select" postMessage event in
+  // embed mode (confirmed against the vendored build), so `selection` is
+  // permanently null here — there is no click-to-select in this editor.
+  // Rendering the attach button disabled with "select something" copy would
+  // tell the user to do something that's structurally impossible, so it only
+  // renders on the (currently unreachable) chance a selection exists.
+  if (!selection && total === 0) return null;
   return (
     <div style={{ marginBottom: tokens.space(4), fontSize: tokens.size.sm, color: tokens.color.textMuted }}>
       <div style={{ display: "flex", gap: tokens.space(2), alignItems: "center", flexWrap: "wrap" }}>
-        <Button variant="ghost" onClick={onAttach} disabled={!selection}>
-          {selection
-            ? `Attach "${selection.kind === "node" ? selection.node.label : selection.edge.label || selection.edge.id}"`
-            : "Select something in the diagram to attach it"}
-        </Button>
+        {selection && (
+          <Button variant="ghost" onClick={onAttach}>
+            {`Attach "${selection.kind === "node" ? selection.node.label : selection.edge.label || selection.edge.id}"`}
+          </Button>
+        )}
         {total > 0 && (
           <>
             <span>

@@ -227,6 +227,22 @@ export function extractFromDrawioXml(xml: string): DfdGraph {
     if (cell["@_vertex"] === "1" || cell["@_edge"] === "1") handle({}, cell);
   }
 
+  // Same root cause as the dangling-edge drop above: the real editor lets a
+  // user delete a trust-boundary shape without clearing dfdTrustBoundary off
+  // the nodes it contained, and lets a shape come in from draw.io's own
+  // generic search sidebar with no label at all. Both used to reach
+  // dfdGraphSchema.parse() below malformed and abort extraction with the
+  // generic "couldn't read that diagram" error instead of either fixing
+  // itself (unlabeled -> id) or routing through checkDfdReferences (orphaned
+  // boundary -> just drop the dangling pointer, same as a dangling edge).
+  const boundaryIds = new Set(trustBoundaries.map((b) => b.id as string));
+  for (const node of nodes) {
+    if (typeof node.trustBoundary === "string" && !boundaryIds.has(node.trustBoundary)) {
+      delete node.trustBoundary;
+    }
+    if (!node.label) node.label = node.id;
+  }
+
   return dfdGraphSchema.parse({ version: "1.0", nodes, edges, trustBoundaries });
 }
 

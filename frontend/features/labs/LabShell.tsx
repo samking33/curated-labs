@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { THREAT_RETRY_LIMIT, type DfdSelection, type LabDetail, type LabStep, type StepResult } from "@curated-labs/shared";
 import { DfdEditorFrame } from "@/features/dfd-editor/DfdEditorFrame";
 import { api, ApiRequestError, newIdempotencyKey } from "@/lib/api";
@@ -63,6 +64,7 @@ export function LabShell({
   backHref?: string;
   dfdSavePath?: string;
 }) {
+  const router = useRouter();
   const [attemptId, setAttemptId] = useState<string | undefined>(initialAttemptId);
   const [step, setStep] = useState<LabStep>("intro");
   const [selection, setSelection] = useState<DfdSelection>(null);
@@ -146,12 +148,18 @@ export function LabShell({
       setAttemptId(attempt.id);
       // Resume where the learner left off rather than restarting the lab.
       setStep(attempt.currentStep === "intro" ? "architecture_issues" : attempt.currentStep);
+      // Once attemptId is set the DFD panel flips edit -> view and its iframe
+      // reloads from the `lab` prop — but that prop was fetched server-side
+      // when the page first loaded, before any edit made in the edit-mode
+      // panel. Without this, a saved edit looks like it silently reverted
+      // (it's safely in the database, just not in this stale prop).
+      router.refresh();
     } catch (err) {
       setError(messageFor(err));
     } finally {
       setBusy(false);
     }
-  }, [startPath]);
+  }, [startPath, router]);
 
   const submit = useCallback(
     async (target: LabStep, body: unknown) => {

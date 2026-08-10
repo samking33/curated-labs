@@ -165,6 +165,36 @@ describe("extractFromDrawioXml", () => {
     expect(graph.edges).toEqual([]);
   });
 
+  // Same class of bug as the dangling edge above, but for a deleted trust
+  // boundary: the real editor lets a user delete a boundary shape without
+  // clearing dfdTrustBoundary off the nodes it used to contain, which used to
+  // blow up dfdGraphSchema's superRefine ("references unknown trust
+  // boundary") and abort extraction entirely.
+  it("drops a node's trustBoundary reference instead of throwing when the boundary no longer exists", () => {
+    const xml =
+      '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+      '<object id="n1" label="Kept" dfdKind="node" dfdType="process" dfdTrustBoundary="gone">' +
+      '<mxCell style="ellipse;" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></object>' +
+      "</root></mxGraphModel>";
+    const graph = extractFromDrawioXml(xml);
+    expect(graph.nodes).toHaveLength(1);
+    expect(graph.nodes[0]!.trustBoundary).toBeUndefined();
+  });
+
+  // A shape dragged from draw.io's own generic search sidebar (not our
+  // custom shape library) can land with no label at all, which used to fail
+  // dfdNodeSchema's label min(1) and abort extraction entirely.
+  it("defaults an empty label to the node's own id instead of throwing", () => {
+    const xml =
+      '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+      '<mxCell id="freehand" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">' +
+      '<mxGeometry x="0" y="0" width="80" height="80" as="geometry"/></mxCell>' +
+      "</root></mxGraphModel>";
+    const graph = extractFromDrawioXml(xml);
+    expect(graph.nodes).toHaveLength(1);
+    expect(graph.nodes[0]!.label).toBe("freehand");
+  });
+
   // The real embedded editor's "save" event does not hand back the bare
   // <mxGraphModel> compileToDrawioXml produces and DfdEditorFrame loads in —
   // it wraps it in <mxfile><diagram>, draw.io's own file format. Confirmed
