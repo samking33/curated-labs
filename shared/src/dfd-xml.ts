@@ -1,4 +1,6 @@
+import { XMLParser } from "fast-xml-parser";
 import { LAYOUT_GAPS, NODE_H, NODE_W, layoutGraph } from "./dfd-layout";
+import { dfdGraphSchema } from "./schemas/dfd";
 import type { DfdGraph, DfdNode, DfdNodeType } from "./schemas/dfd";
 
 /**
@@ -74,7 +76,7 @@ export function compileToDrawioXml(graph: DfdGraph): string {
     const pos = layout.nodes.get(node.id)!;
     cells.push(
       `<object id="${escapeXml(node.id)}" label="${escapeXml(node.label)}" dfdKind="node" dfdType="${node.type}" ` +
-        `dfdDescription="${escapeXml(node.description)}" dfdAssets="${escapeXml(node.assets.join(","))}"` +
+        `dfdDescription="${escapeXml(node.description)}" dfdAssets="${escapeXml(node.assets.map(encodeURIComponent).join(","))}"` +
         (node.trustBoundary ? ` dfdTrustBoundary="${escapeXml(node.trustBoundary)}"` : "") +
         `><mxCell style="${SHAPE_STYLE[node.type]}" vertex="1" parent="1">` +
         `<mxGeometry x="${pos.x}" y="${pos.y}" width="${NODE_W}" height="${NODE_H}" as="geometry"/>` +
@@ -85,7 +87,7 @@ export function compileToDrawioXml(graph: DfdGraph): string {
   for (const edge of graph.edges) {
     cells.push(
       `<object id="${escapeXml(edge.id)}" label="${escapeXml(edge.label)}" dfdKind="edge" ` +
-        `dfdProtocol="${escapeXml(edge.protocol)}" dfdData="${escapeXml(edge.data.join(","))}" ` +
+        `dfdProtocol="${escapeXml(edge.protocol)}" dfdData="${escapeXml(edge.data.map(encodeURIComponent).join(","))}" ` +
         `dfdTrustBoundaryCrossing="${edge.trustBoundaryCrossing ? "1" : "0"}">` +
         `<mxCell style="${edge.trustBoundaryCrossing ? EDGE_CROSSING_STYLE : EDGE_STYLE}" edge="1" parent="1" ` +
         `source="${escapeXml(edge.source)}" target="${escapeXml(edge.target)}">` +
@@ -99,4 +101,130 @@ export function compileToDrawioXml(graph: DfdGraph): string {
     `fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">` +
     `<root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells.join("")}</root></mxGraphModel>`
   );
+}
+
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  isArray: (name) => name === "object" || name === "mxCell",
+});
+
+/** Reverse of SHAPE_STYLE, for cells a user drew freehand (no dfdType
+ *  attribute because they came from the shape library, not our compiler).
+ *  Order matters — more specific substrings are checked first. */
+const STYLE_TO_TYPE: [string, DfdNodeType][] = [
+  ["shape=partialRectangle", "data_store"],
+  ["shape=process", "queue"],
+  ["ellipse", "process"],
+  ["dashed=1", "third_party"],
+  ["rounded=0", "external_entity"],
+];
+
+function inferType(style: string): DfdNodeType {
+  for (const [needle, type] of STYLE_TO_TYPE) if (style.includes(needle)) return type;
+  return "process";
+}
+
+function splitList(value: unknown): string[] {
+  const s = typeof value === "string" ? value : "";
+  return s.length ? s.split(",").filter(Boolean).map(decodeURIComponent) : [];
+}
+
+type RawAttrs = Record<string, unknown>;
+
+/**
+ * draw.io XML -> DfdGraph. Handles both our own compiled output (`<object
+ * dfdKind="...">` wrapping an `<mxCell>`, carrying our semantic attributes)
+ * and cells a user drew freehand from the shape library (a bare `<mxCell>`
+ * with no wrapper or custom attributes) — those get best-effort defaults.
+ * Always re-validates with dfdGraphSchema before returning: a malformed or
+ * hand-edited file must fail loudly here, not deep inside a grading loop.
+ */
+export function extractFromDrawioXml(xml: string): DfdGraph {
+  const doc = parser.parse(xml) as { mxGraphModel?: { root?: RawAttrs } };
+  const root = doc.mxGraphModel?.root;
+  if (!root) throw new Error("Not a valid draw.io diagram: missing mxGraphModel/root.");
+
+  const objects = (root.object as RawAttrs[]) ?? [];
+  const allCells = (root.mxCell as RawAttrs[]) ?? [];
+  const wrappedCellIds = new Set(
+    objects
+      .map((o) => {
+        const cellField = o.mxCell;
+        const cell = Array.isArray(cellField) ? cellField[0] : cellField;
+        return (cell as RawAttrs | undefined)?.["@_id"];
+      })
+      .filter(Boolean),
+  );
+  const bareCells = allCells.filter(
+    (c) => c["@_id"] !== "0" && c["@_id"] !== "1" && !wrappedCellIds.has(c["@_id"]),
+  );
+
+  const nodes: Record<string, unknown>[] = [];
+  const edges: Record<string, unknown>[] = [];
+  const trustBoundaries: Record<string, unknown>[] = [];
+
+  const handle = (attrs: RawAttrs, cell: RawAttrs) => {
+    const id = String(attrs["@_id"] ?? cell["@_id"]);
+    const label = String(attrs["@_label"] ?? cell["@_value"] ?? "");
+    const style = String(cell["@_style"] ?? "");
+    const kind = attrs["@_dfdKind"];
+
+    if (kind === "boundary" || (!kind && cell["@_connectable"] === "0")) {
+      trustBoundaries.push({ id, label, description: String(attrs["@_dfdDescription"] ?? "") });
+      return;
+    }
+    if (kind === "edge" || cell["@_edge"] === "1") {
+      edges.push({
+        id,
+        source: String(cell["@_source"] ?? ""),
+        target: String(cell["@_target"] ?? ""),
+        label,
+        protocol: String(attrs["@_dfdProtocol"] ?? ""),
+        data: splitList(attrs["@_dfdData"]),
+        trustBoundaryCrossing: attrs["@_dfdTrustBoundaryCrossing"] === "1",
+      });
+      return;
+    }
+    nodes.push({
+      id,
+      type: (attrs["@_dfdType"] as string | undefined) ?? inferType(style),
+      label,
+      description: String(attrs["@_dfdDescription"] ?? ""),
+      ...(attrs["@_dfdTrustBoundary"] ? { trustBoundary: String(attrs["@_dfdTrustBoundary"]) } : {}),
+      assets: splitList(attrs["@_dfdAssets"]),
+    });
+  };
+
+  for (const obj of objects) {
+    const cellField = obj.mxCell;
+    const cell = Array.isArray(cellField) ? cellField[0] : cellField;
+    if (cell) handle(obj, cell as RawAttrs);
+  }
+  for (const cell of bareCells) {
+    if (cell["@_vertex"] === "1" || cell["@_edge"] === "1") handle({}, cell);
+  }
+
+  return dfdGraphSchema.parse({ version: "1.0", nodes, edges, trustBoundaries });
+}
+
+/**
+ * Generic referential check: does every affectedNodeIds/affectedEdgeIds
+ * reference still resolve against this graph? Used to reject a DFD edit that
+ * orphans a threat or architecture-issue reference. Deliberately NOT the same
+ * function as validateSeedReferences (that operates on pre-mint, key-based
+ * seed data) — this works on any already-UUID'd reference list.
+ */
+export function checkDfdReferences(
+  graph: DfdGraph,
+  refs: { label: string; affectedNodeIds: string[]; affectedEdgeIds: string[] }[],
+): string[] {
+  const nodeIds = new Set(graph.nodes.map((n) => n.id));
+  const edgeIds = new Set(graph.edges.map((e) => e.id));
+  const errors: string[] = [];
+  for (const ref of refs) {
+    for (const id of ref.affectedNodeIds) if (!nodeIds.has(id)) errors.push(`${ref.label}: unknown node "${id}"`);
+    for (const id of ref.affectedEdgeIds) if (!edgeIds.has(id)) errors.push(`${ref.label}: unknown edge "${id}"`);
+  }
+  return errors;
 }
