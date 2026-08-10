@@ -41,4 +41,22 @@ describe("embedUrl", () => {
     const url = embedUrl("edit");
     expect(url).not.toContain("chrome=");
   });
+
+  // clibs=U<url> is how the vendored build's App.prototype.restoreLibraries
+  // auto-opens a URL-backed custom shape library at startup (see the
+  // comment on embedUrl() for the grep evidence). Only needed in edit mode
+  // — restoreLibraries is a no-op without a sidebar, which view mode lacks.
+  // The URL must be absolute (the caller's origin) — a relative path fails
+  // the vendored build's isCorsEnabledForUrl check and gets routed through
+  // a proxy servlet this static deployment doesn't have (see the comment
+  // on embedUrl() for how that was confirmed live against a real 404).
+  it("points clibs at an absolute DFD shape library URL for edit mode", () => {
+    const url = embedUrl("edit", "http://localhost:3000");
+    expect(url).toContain(`clibs=U${encodeURIComponent("http://localhost:3000/drawio-shapes/dfd-shapes.xml")}`);
+  });
+
+  it("omits clibs for view mode even when an origin is passed", () => {
+    const url = embedUrl("view", "http://localhost:3000");
+    expect(url).not.toContain("clibs=");
+  });
 });

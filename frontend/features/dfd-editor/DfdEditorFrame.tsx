@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { compileToDrawioXml, type DfdGraph, type DfdSelection } from "@curated-labs/shared";
 import { embedUrl, loadAction, parseDrawioMessage } from "./drawio-protocol";
 
@@ -44,11 +44,23 @@ export function DfdEditorFrame({
     return () => window.removeEventListener("message", handleMessage);
   }, [graph, mode, onSave, onSelectionChange]);
 
+  // embedUrl's clibs param (edit mode only) needs an absolute origin — see
+  // its own comment. That's a browser-only value, so the src is built after
+  // mount rather than during render: computing it during render would give
+  // the server and the client different values for the same attribute (no
+  // window on the server), which React flags as a hydration mismatch. This
+  // way the initial render (server and client alike) has no src, and the
+  // iframe only starts loading once, with the right URL, post-mount.
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    setSrc(embedUrl(mode, window.location.origin));
+  }, [mode]);
+
   return (
     <iframe
       ref={frameRef}
       title="DFD diagram"
-      src={embedUrl(mode)}
+      src={src ?? undefined}
       style={{ width: "100%", height: "100%", border: "none" }}
     />
   );

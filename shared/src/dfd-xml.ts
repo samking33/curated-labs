@@ -138,12 +138,22 @@ type RawAttrs = Record<string, unknown>;
  * dfdKind="...">` wrapping an `<mxCell>`, carrying our semantic attributes)
  * and cells a user drew freehand from the shape library (a bare `<mxCell>`
  * with no wrapper or custom attributes) — those get best-effort defaults.
+ * Also handles the real editor's own `<mxfile><diagram><mxGraphModel>`
+ * wrapper (confirmed by Task 13's manual verification pass against the live
+ * embed's `save` event — it does not send back the bare `<mxGraphModel>` we
+ * load in with), not just the bare `<mxGraphModel>` `compileToDrawioXml`
+ * emits, so an edit made in the real editor round-trips too.
  * Always re-validates with dfdGraphSchema before returning: a malformed or
  * hand-edited file must fail loudly here, not deep inside a grading loop.
  */
 export function extractFromDrawioXml(xml: string): DfdGraph {
-  const doc = parser.parse(xml) as { mxGraphModel?: { root?: RawAttrs } };
-  const root = doc.mxGraphModel?.root;
+  const doc = parser.parse(xml) as {
+    mxGraphModel?: { root?: RawAttrs };
+    mxfile?: { diagram?: { mxGraphModel?: { root?: RawAttrs } } | { mxGraphModel?: { root?: RawAttrs } }[] };
+  };
+  const diagram = doc.mxfile?.diagram;
+  const firstDiagram = Array.isArray(diagram) ? diagram[0] : diagram;
+  const root = doc.mxGraphModel?.root ?? firstDiagram?.mxGraphModel?.root;
   if (!root) throw new Error("Not a valid draw.io diagram: missing mxGraphModel/root.");
 
   const objects = (root.object as RawAttrs[]) ?? [];

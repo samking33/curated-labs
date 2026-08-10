@@ -144,6 +144,23 @@ describe("extractFromDrawioXml", () => {
   it("throws on XML with no mxGraphModel/root", () => {
     expect(() => extractFromDrawioXml("<not-a-diagram/>")).toThrow();
   });
+
+  // The real embedded editor's "save" event does not hand back the bare
+  // <mxGraphModel> compileToDrawioXml produces and DfdEditorFrame loads in —
+  // it wraps it in <mxfile><diagram>, draw.io's own file format. Confirmed
+  // live in Task 13's manual verification pass (every edit-mode save 400'd
+  // against BAD_REQUEST "Couldn't read that diagram" before this was handled).
+  it("unwraps the real editor's <mxfile><diagram><mxGraphModel> save format", () => {
+    const graph = dfdGraphSchema.parse({
+      version: "1.0",
+      nodes: [{ id: "a", type: "process", label: "A" }],
+      edges: [],
+      trustBoundaries: [],
+    });
+    const bare = compileToDrawioXml(graph);
+    const wrapped = `<mxfile host="localhost"><diagram id="d1" name="Page-1">${bare}</diagram></mxfile>`;
+    expect(extractFromDrawioXml(wrapped)).toEqual(graph);
+  });
 });
 
 describe("extractFromDrawioXml against every curated seed DFD", () => {
