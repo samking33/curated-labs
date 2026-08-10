@@ -350,7 +350,18 @@ export function LabShell({
             onSave={
               dfdSavePath
                 ? async (xml) => {
-                    await api(dfdSavePath, { method: "PATCH", body: JSON.stringify({ drawioXml: xml }) });
+                    // DfdEditorFrame doesn't await/catch this (see its own
+                    // comment) — an uncaught rejection here is a silent save
+                    // failure with zero feedback, which is exactly the
+                    // referential-integrity 400 case (delete a node a threat
+                    // still points at). Route it through the same error
+                    // state and Alert every other step already uses.
+                    try {
+                      await api(dfdSavePath, { method: "PATCH", body: JSON.stringify({ drawioXml: xml }) });
+                      setError(null);
+                    } catch (err) {
+                      setError(messageFor(err));
+                    }
                   }
                 : undefined
             }

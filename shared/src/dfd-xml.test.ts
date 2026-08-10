@@ -145,6 +145,26 @@ describe("extractFromDrawioXml", () => {
     expect(() => extractFromDrawioXml("<not-a-diagram/>")).toThrow();
   });
 
+  // Deleting a vertex in the real editor (plain Delete key) does not delete
+  // its connected edges — they survive with one endpoint attribute missing.
+  // Confirmed live in Task 13's manual verification pass: this used to blow
+  // up dfdGraphSchema's min(1) check on source/target and abort the whole
+  // extraction with a generic "couldn't read that diagram" error instead of
+  // routing through checkDfdReferences to name the threat that referenced
+  // the deleted node/edge.
+  it("drops a dangling edge (missing source or target) instead of throwing", () => {
+    const xml =
+      '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+      '<object id="n1" label="Kept" dfdKind="node" dfdType="process">' +
+      '<mxCell style="ellipse;" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></object>' +
+      '<object id="e1" label="Dangling" dfdKind="edge">' +
+      '<mxCell edge="1" parent="1" target="n1"><mxGeometry as="geometry"/></mxCell></object>' +
+      "</root></mxGraphModel>";
+    const graph = extractFromDrawioXml(xml);
+    expect(graph.nodes).toHaveLength(1);
+    expect(graph.edges).toEqual([]);
+  });
+
   // The real embedded editor's "save" event does not hand back the bare
   // <mxGraphModel> compileToDrawioXml produces and DfdEditorFrame loads in —
   // it wraps it in <mxfile><diagram>, draw.io's own file format. Confirmed

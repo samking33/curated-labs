@@ -186,10 +186,21 @@ export function extractFromDrawioXml(xml: string): DfdGraph {
       return;
     }
     if (kind === "edge" || cell["@_edge"] === "1") {
+      const source = String(cell["@_source"] ?? "");
+      const target = String(cell["@_target"] ?? "");
+      // The real editor doesn't delete connected edges when a vertex is
+      // deleted (plain Delete on a node leaves its edges behind, now missing
+      // one endpoint) — drop the dangling edge here rather than pushing a
+      // malformed one that fails dfdGraphSchema.parse() below and aborts the
+      // whole extraction with a generic "couldn't read that diagram" error.
+      // Dropping it instead lets checkDfdReferences (in the PATCH handler)
+      // catch the now-missing edge/node id and report which threat or issue
+      // it broke, same as it does for a node deleted outright.
+      if (!source || !target) return;
       edges.push({
         id,
-        source: String(cell["@_source"] ?? ""),
-        target: String(cell["@_target"] ?? ""),
+        source,
+        target,
         label,
         protocol: String(attrs["@_dfdProtocol"] ?? ""),
         data: splitList(attrs["@_dfdData"]),
