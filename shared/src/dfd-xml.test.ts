@@ -78,6 +78,38 @@ describe("compileToDrawioXml", () => {
   it("wires edge source/target to the real node ids", () => {
     expect(xml).toContain('source="customer" target="storefront"');
   });
+
+  it("uses a provider-specific style and stamps dfdProvider when a node has a provider", () => {
+    const graph = dfdGraphSchema.parse({
+      version: "1.0",
+      nodes: [
+        { id: "a", type: "data_store", label: "A", provider: "aws" },
+        { id: "b", type: "external_entity", label: "B" }, // no provider set, and wrong type for one anyway
+      ],
+      edges: [],
+      trustBoundaries: [],
+    });
+    const xml = compileToDrawioXml(graph);
+    expect(xml).toContain('dfdProvider="aws"');
+    // The generic external_entity style must still be used for the node with no provider.
+    // (window widened from the brief's {0,50} to {0,100}: the real attribute
+    // string between dfdKind="node" and the style is 73 chars for this node.)
+    expect(xml).toMatch(/id="b"[^>]*dfdKind="node"[\s\S]{0,100}rounded=0;whiteSpace=wrap;html=1;/);
+  });
+
+  it("ignores provider on non-infrastructure types even if somehow set", () => {
+    // dfdNodeSchema doesn't forbid provider on e.g. external_entity at the type level
+    // (it's a per-field optional, not cross-field validated) — the COMPILER is what
+    // enforces the 4-type scoping, so this proves that enforcement directly.
+    const graph = dfdGraphSchema.parse({
+      version: "1.0",
+      nodes: [{ id: "a", type: "external_entity", label: "A", provider: "aws" }],
+      edges: [],
+      trustBoundaries: [],
+    });
+    const xml = compileToDrawioXml(graph);
+    expect(xml).not.toContain('dfdProvider="aws"');
+  });
 });
 
 describe("extractFromDrawioXml", () => {
