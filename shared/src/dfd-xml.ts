@@ -267,6 +267,7 @@ export function extractFromDrawioXml(xml: string): DfdGraph {
       label,
       description: String(attrs["@_dfdDescription"] ?? ""),
       ...(attrs["@_dfdTrustBoundary"] ? { trustBoundary: String(attrs["@_dfdTrustBoundary"]) } : {}),
+      ...(attrs["@_dfdProvider"] ? { provider: String(attrs["@_dfdProvider"]) } : {}),
       assets: splitList(attrs["@_dfdAssets"]),
     });
   };

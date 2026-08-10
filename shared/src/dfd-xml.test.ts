@@ -243,6 +243,28 @@ describe("extractFromDrawioXml", () => {
     const wrapped = `<mxfile host="localhost"><diagram id="d1" name="Page-1">${bare}</diagram></mxfile>`;
     expect(extractFromDrawioXml(wrapped)).toEqual(graph);
   });
+
+  it("round-trips a node's provider field", () => {
+    const graph = dfdGraphSchema.parse({
+      version: "1.0",
+      nodes: [{ id: "a", type: "data_store", label: "A", provider: "aws" }],
+      edges: [],
+      trustBoundaries: [],
+    });
+    const extracted = extractFromDrawioXml(compileToDrawioXml(graph));
+    expect(extracted).toEqual(graph);
+  });
+
+  it("extracts no provider for a node that never had one", () => {
+    const graph = dfdGraphSchema.parse({
+      version: "1.0",
+      nodes: [{ id: "a", type: "process", label: "A" }],
+      edges: [],
+      trustBoundaries: [],
+    });
+    const extracted = extractFromDrawioXml(compileToDrawioXml(graph));
+    expect(extracted.nodes[0].provider).toBeUndefined();
+  });
 });
 
 describe("extractFromDrawioXml against every curated seed DFD", () => {
