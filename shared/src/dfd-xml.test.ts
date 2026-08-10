@@ -128,6 +128,19 @@ describe("extractFromDrawioXml", () => {
     expect(graph.nodes[0]).toMatchObject({ id: "freehand", label: "New Node", type: "process" });
   });
 
+  it("infers a service (not process) node from a bare mxCell using the service ellipse style", () => {
+    const xml =
+      '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+      '<mxCell id="freehand" value="New Service" ' +
+      'style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#dae8fc;strokeColor=#6c8ebf;" ' +
+      'vertex="1" parent="1">' +
+      '<mxGeometry x="0" y="0" width="80" height="80" as="geometry"/></mxCell>' +
+      "</root></mxGraphModel>";
+    const graph = extractFromDrawioXml(xml);
+    expect(graph.nodes).toHaveLength(1);
+    expect(graph.nodes[0]).toMatchObject({ id: "freehand", label: "New Service", type: "service" });
+  });
+
   it("throws on XML with no mxGraphModel/root", () => {
     expect(() => extractFromDrawioXml("<not-a-diagram/>")).toThrow();
   });

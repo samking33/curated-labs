@@ -115,6 +115,7 @@ const parser = new XMLParser({
 const STYLE_TO_TYPE: [string, DfdNodeType][] = [
   ["shape=partialRectangle", "data_store"],
   ["shape=process", "queue"],
+  ["fillColor=#dae8fc", "service"],
   ["ellipse", "process"],
   ["dashed=1", "third_party"],
   ["rounded=0", "external_entity"],
