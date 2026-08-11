@@ -5,11 +5,12 @@ services:
     plan: free
     region: singapore
     rootDir: ./backend
-    # corepack pins the exact pnpm version the repo declares (package.json's
-    # "packageManager" field) - Render's Node image ships npm/yarn but not
-    # pnpm by default. db:generate must run explicitly (no postinstall hook)
-    # or the build succeeds with a stale/missing Prisma Client.
-    buildCommand: corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install && pnpm db:generate && pnpm build
+    # Render's Node image ships pnpm pre-installed at /usr/bin/pnpm - no
+    # corepack step needed (corepack enable actively fails here: it tries to
+    # replace that symlink and the build filesystem is read-only at that
+    # path). db:generate must run explicitly (no postinstall hook) or the
+    # build succeeds with a stale/missing Prisma Client.
+    buildCommand: pnpm install && pnpm db:generate && pnpm build
     startCommand: pnpm start
     healthCheckPath: /api/v1/health/live
     envVars:
@@ -85,7 +86,8 @@ services:
     rootDir: ./frontend
     # frontend's own build script is just "next build" (it doesn't build the
     # shared package first the way backend's does), so that's chained here.
-    buildCommand: corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install && pnpm --filter @curated-labs/shared build && pnpm build
+    # No corepack step - see curated-labs-api's buildCommand comment.
+    buildCommand: pnpm install && pnpm --filter @curated-labs/shared build && pnpm build
     startCommand: pnpm start
     healthCheckPath: /login
     envVars:
