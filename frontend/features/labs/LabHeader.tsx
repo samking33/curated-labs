@@ -63,7 +63,7 @@ export function LabHeader({
             style={{ display: "flex", alignItems: "center", gap: tokens.space(2), fontSize: tokens.size.sm }}
           >
             <Link href={backHref} style={{ color: tokens.color.textMuted, textDecoration: "none" }}>
-              Labs
+              ← Labs
             </Link>
             <span style={{ color: tokens.color.textFaint }}>/</span>
             <Link
