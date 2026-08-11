@@ -17,6 +17,7 @@ import type { ZodType, ZodTypeDef } from "zod";
 import { CONFIG, type AppConfig } from "../../config";
 import { PrismaService } from "../prisma/prisma.service";
 import { NimClient, NimUnavailableError } from "./nim-client";
+import { AnthropicClient, AnthropicUnavailableError } from "./anthropic-client";
 import { AUTHOR_PROMPTS, GENERATED_RUBRIC_NOTE, PROMPTS, buildGeneratorUserPrompt, untrusted } from "./prompts";
 
 export type AiStatus = "ok" | "unavailable" | "invalid";
@@ -54,6 +55,7 @@ export class AiService {
 
   constructor(
     private readonly nim: NimClient,
+    private readonly anthropic: AnthropicClient,
     private readonly prisma: PrismaService,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
@@ -312,18 +314,79 @@ export class AiService {
     difficulty?: GenerateScenarioRequest["difficulty"];
     priorErrors?: string[];
   }): Promise<AiResult<PlaygroundScenarioDraft>> {
-    const user = buildGeneratorUserPrompt(input);
-    return this.run(
-      "playground_scenario",
-      user,
-      playgroundScenarioDraftSchema,
-      input.sessionId,
-      [],
-      {
+    if (!this.anthropic.configured) return { feedback: null, status: "unavailable" };
+
+    const user = this.truncate(buildGeneratorUserPrompt(input));
+    const prompt = AUTHOR_PROMPTS.playground_scenario;
+    const deadline = Date.now() + this.config.PLAYGROUND_GEN_BUDGET_MS;
+    const started = Date.now();
+
+    try {
+      const response = await this.anthropic.chat({
+        system: prompt.system,
+        user,
         maxTokens: this.config.PLAYGROUND_GEN_MAX_OUTPUT_TOKENS,
-        budgetMs: this.config.PLAYGROUND_GEN_BUDGET_MS,
-      },
-    );
+        deadline,
+      });
+
+      let payload: unknown;
+      try {
+        payload = extractJson(response.text);
+      } catch {
+        await this.recordCall("playground_scenario", response.model, prompt.version, "error", started, {
+          labId: input.sessionId,
+          code: "UNPARSEABLE",
+          stopReason: response.stopReason,
+          outputTokens: response.outputTokens,
+        });
+        this.logger.warn(
+          { task: "playground_scenario", stopReason: response.stopReason, outputTokens: response.outputTokens },
+          "Anthropic response was not JSON",
+        );
+        return { feedback: null, status: "invalid" };
+      }
+
+      const parsed = playgroundScenarioDraftSchema.safeParse(payload);
+      if (!parsed.success) {
+        await this.recordCall("playground_scenario", response.model, prompt.version, "invalid_json", started, {
+          labId: input.sessionId,
+          issues: parsed.error.issues.length,
+        });
+        this.logger.warn(
+          { task: "playground_scenario", issues: parsed.error.issues.length },
+          "Anthropic response failed schema validation",
+        );
+        return { feedback: null, status: "invalid" };
+      }
+
+      // Same guard as every other AI call (see `run()`'s comment) — a prompt
+      // injection asking the model to echo its own instructions passes schema
+      // validation just fine, so this is the last line of defence before the
+      // learner sees it.
+      const redacted = redactSecrets(parsed.data, promptLines(prompt.system));
+      if (redacted.redactions > 0) {
+        this.logger.warn(
+          { task: "playground_scenario", labId: input.sessionId, redactions: redacted.redactions },
+          "redacted curated content from AI output — possible prompt injection",
+        );
+      }
+
+      await this.recordCall("playground_scenario", response.model, prompt.version, "ok", started, {
+        labId: input.sessionId,
+        inputTokens: response.inputTokens,
+        outputTokens: response.outputTokens,
+        redactions: redacted.redactions,
+      });
+      return { feedback: redacted.value, status: "ok", model: response.model };
+    } catch (err) {
+      const code = err instanceof AnthropicUnavailableError ? err.code : "UNKNOWN";
+      await this.recordCall("playground_scenario", this.config.ANTHROPIC_MODEL, prompt.version, "error", started, {
+        labId: input.sessionId,
+        code,
+      });
+      this.logger.warn({ task: "playground_scenario", code }, "Anthropic call failed");
+      return { feedback: null, status: "unavailable" };
+    }
   }
 
   /* ------------------------------------------------------------- engine */
@@ -349,7 +412,7 @@ export class AiService {
     secrets: string[] = [],
     /** Overrides for calls with a much larger/slower workload than coaching
      *  (scenario generation) — omitted, coaching keeps its normal ceilings. */
-    opts: { maxTokens?: number; budgetMs?: number } = {},
+    opts: { maxTokens?: number; budgetMs?: number; attemptTimeoutMs?: number } = {},
   ): Promise<AiResult<T>> {
     if (!this.nim.configured) return { feedback: null, status: "unavailable" };
 
@@ -376,6 +439,7 @@ export class AiService {
           user: this.truncate(userPrompt),
           deadline,
           maxTokens: opts.maxTokens,
+          attemptTimeoutMs: opts.attemptTimeoutMs,
         });
 
         // extractJson can throw on unparseable output; treat that as this

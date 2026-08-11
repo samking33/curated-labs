@@ -51,8 +51,20 @@ const schema = z.object({
    * ~85s and ~6-7k output tokens, far past AI_TASK_BUDGET_MS/AI_MAX_OUTPUT_TOKENS.
    * Hence separate budget/token ceilings, used only by generateScenario().
    */
-  PLAYGROUND_GEN_MAX_OUTPUT_TOKENS: z.coerce.number().int().default(6000),
+  PLAYGROUND_GEN_MAX_OUTPUT_TOKENS: z.coerce.number().int().default(12000),
   PLAYGROUND_GEN_BUDGET_MS: z.coerce.number().int().default(150000),
+  /**
+   * Without this, NimClient's per-attempt timeout falls back to the generic
+   * AI_TIMEOUT_MS (25s) — far below what nemotron-3-super-120b-a12b actually
+   * needs, so the one model benchmarked to reliably return a valid scenario
+   * would time out on literally every attempt and every job would silently
+   * fall back to weaker models that this task's own comment says aren't
+   * reliable for it. Set close to (not equal to) PLAYGROUND_GEN_BUDGET_MS: the
+   * good model should get nearly the whole budget on each of its two
+   * attempts (per PlaygroundGenerationService.runJob) rather than being cut
+   * short to leave time for weaker fallbacks that rarely help this task.
+   */
+  PLAYGROUND_GEN_ATTEMPT_TIMEOUT_MS: z.coerce.number().int().default(140000),
 
   /** Rolling-window generation quotas, enforced by counting job rows. */
   PLAYGROUND_GEN_PER_USER: z.coerce.number().int().default(10),
@@ -61,12 +73,20 @@ const schema = z.object({
 
   /** A job stuck "running" past this long is reaped back to "failed". */
   PLAYGROUND_STALE_JOB_MS: z.coerce.number().int().default(300000),
+
+  /** Playground scenario generation only (AnthropicClient) — NIM's
+   *  fallback chain was unreliable for this specific task. Every other AI
+   *  call still goes through NimClient. */
+  ANTHROPIC_API_KEY: z.string().default(""),
+  ANTHROPIC_MODEL: z.string().default("claude-sonnet-5"),
+  ANTHROPIC_BASE_URL: z.string().default("https://api.anthropic.com"),
 });
 
 export type AppConfig = z.infer<typeof schema> & {
   isProduction: boolean;
   googleConfigured: boolean;
   nimConfigured: boolean;
+  anthropicConfigured: boolean;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -90,6 +110,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     isProduction: cfg.NODE_ENV === "production",
     googleConfigured: Boolean(cfg.GOOGLE_CLIENT_ID && cfg.GOOGLE_CLIENT_SECRET),
     nimConfigured: Boolean(cfg.NVIDIA_NIM_API_KEY),
+    anthropicConfigured: Boolean(cfg.ANTHROPIC_API_KEY),
   };
 }
 

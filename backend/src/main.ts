@@ -53,6 +53,8 @@ async function bootstrap() {
   logger.log(`API listening on ${config.API_BASE_URL}${API_PREFIX}`);
   if (!config.googleConfigured) logger.warn("Google OIDC is not configured — sign-in is unavailable.");
   if (!config.nimConfigured) logger.warn("NVIDIA NIM is not configured — AI coaching will be unavailable.");
+  if (!config.anthropicConfigured)
+    logger.warn("Anthropic is not configured — Playground scenario generation will be unavailable.");
   if (config.ALLOW_DEV_LOGIN) logger.warn("ALLOW_DEV_LOGIN is on. Development only.");
 }
 
