@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "pnpm --filter @curated-labs/shared build && next build",
     "start": "next start",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
