@@ -20,6 +20,22 @@ describe("parseDrawioMessage", () => {
   it("returns null for a JSON value with no event field", () => {
     expect(parseDrawioMessage(JSON.stringify({ foo: "bar" }))).toBeNull();
   });
+
+  it("parses a dfd-selection event from the same-origin bridge script", () => {
+    expect(parseDrawioMessage(JSON.stringify({ event: "dfd-selection", kind: "node", id: "customer" }))).toEqual({
+      event: "dfd-selection",
+      kind: "node",
+      id: "customer",
+    });
+  });
+
+  it("parses a dfd-selection event with no selection", () => {
+    expect(parseDrawioMessage(JSON.stringify({ event: "dfd-selection", kind: null, id: null }))).toEqual({
+      event: "dfd-selection",
+      kind: null,
+      id: null,
+    });
+  });
 });
 
 describe("loadAction", () => {

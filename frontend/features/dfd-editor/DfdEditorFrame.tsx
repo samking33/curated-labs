@@ -2,7 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { compileToDrawioXml, type DfdGraph, type DfdSelection } from "@curated-labs/shared";
-import { embedUrl, loadAction, parseDrawioMessage } from "./drawio-protocol";
+import { embedUrl, loadAction, parseDrawioMessage, type DrawioEvent } from "./drawio-protocol";
+
+/** Looks up the full node/edge the bridge script's raw kind/id refers to in
+ *  the graph we already loaded — never trusts a client-reconstructed object
+ *  built from raw XML attributes. Falls back to null for an id the current
+ *  graph doesn't recognize (stale message from a graph that's since changed). */
+function resolveSelection(data: Extract<DrawioEvent, { event: "dfd-selection" }>, graph: DfdGraph): DfdSelection {
+  if (data.kind === "node") {
+    const node = graph.nodes.find((n) => n.id === data.id);
+    return node ? { kind: "node", node } : null;
+  }
+  if (data.kind === "edge") {
+    const edge = graph.edges.find((e) => e.id === data.id);
+    return edge ? { kind: "edge", edge } : null;
+  }
+  return null;
+}
 
 export function DfdEditorFrame({
   graph,
@@ -36,8 +52,8 @@ export function DfdEditorFrame({
         frameRef.current?.contentWindow?.postMessage(JSON.stringify(loadAction(compileToDrawioXml(graph))), "*");
       } else if (data.event === "save" && mode === "edit") {
         onSave?.(data.xml);
-      } else if (data.event === "select") {
-        onSelectionChange(null); // no per-cell inspector yet — draw.io's own UI covers selection detail
+      } else if (data.event === "dfd-selection") {
+        onSelectionChange(resolveSelection(data, graph));
       }
     }
     window.addEventListener("message", handleMessage);

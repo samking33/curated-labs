@@ -8,6 +8,7 @@ import { api, ApiRequestError, newIdempotencyKey } from "@/lib/api";
 import { tokens } from "@/lib/tokens";
 import { Alert, Button, Card } from "@/components/ui";
 import { LabHeader, Roadmap } from "./LabHeader";
+import { NodeDetailsPanel } from "./NodeDetailsPanel";
 import { CheerToast } from "@/features/gamification/CheerToast";
 import { FeedbackPanel } from "./FeedbackPanel";
 import { LabReview } from "./LabReview";
@@ -378,6 +379,7 @@ export function LabShell({
 
         <div style={{ display: "grid", gap: tokens.space(4), alignContent: "start", minWidth: 0 }}>
           {error && <Alert tone="error">{error}</Alert>}
+          <NodeDetailsPanel selection={selection} />
           {body}
           <FeedbackPanel result={result} loading={busy && Boolean(result)} error={null} />
           {(!attemptId || step === "intro") && (

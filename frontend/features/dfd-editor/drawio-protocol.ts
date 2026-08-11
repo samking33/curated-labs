@@ -6,7 +6,15 @@ export type DrawioEvent =
   | { event: "save"; xml: string }
   | { event: "autosave"; xml: string }
   | { event: "select"; cells?: { id: string }[] }
-  | { event: "exit" };
+  | { event: "exit" }
+  /** Emitted by our own same-origin bridge script
+   *  (frontend/public/drawio-selection-bridge/dfd-selection-bridge.js), not
+   *  the vendored draw.io embed itself — the embed's own postMessage
+   *  protocol has no selection-change event. `kind`/`id` are the raw
+   *  dfdKind/id attributes read off the selected mxGraph cell; null for no
+   *  selection, multi-select, or a cell with no dfdKind (trust boundary,
+   *  freehand shape). */
+  | { event: "dfd-selection"; kind: "node" | "edge" | null; id: string | null };
 
 export function parseDrawioMessage(raw: unknown): DrawioEvent | null {
   try {
