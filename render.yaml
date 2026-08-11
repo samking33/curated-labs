@@ -9,8 +9,12 @@ services:
     # corepack step needed (corepack enable actively fails here: it tries to
     # replace that symlink and the build filesystem is read-only at that
     # path). db:generate must run explicitly (no postinstall hook) or the
-    # build succeeds with a stale/missing Prisma Client.
-    buildCommand: pnpm install && pnpm db:generate && pnpm build
+    # build succeeds with a stale/missing Prisma Client. NODE_ENV=development
+    # for just this command: with NODE_ENV=production (the runtime env var
+    # below) pnpm skips devDependencies entirely, so typescript never
+    # installs and the shared package's own "prepare": "tsc" hook falls back
+    # to some other tsc on the image and fails outright.
+    buildCommand: NODE_ENV=development pnpm install && pnpm db:generate && pnpm build
     startCommand: pnpm start
     healthCheckPath: /api/v1/health/live
     envVars:
@@ -86,8 +90,9 @@ services:
     rootDir: ./frontend
     # frontend's own build script is just "next build" (it doesn't build the
     # shared package first the way backend's does), so that's chained here.
-    # No corepack step - see curated-labs-api's buildCommand comment.
-    buildCommand: pnpm install && pnpm --filter @curated-labs/shared build && pnpm build
+    # No corepack step, NODE_ENV=development for install only - see
+    # curated-labs-api's buildCommand comment for both.
+    buildCommand: NODE_ENV=development pnpm install && pnpm --filter @curated-labs/shared build && pnpm build
     startCommand: pnpm start
     healthCheckPath: /login
     envVars:
