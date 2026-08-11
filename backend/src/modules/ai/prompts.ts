@@ -138,7 +138,7 @@ export type PromptKey = keyof typeof PROMPTS;
  * (stricter) trust rules, so it lives in a separate registry that
  * `AiService` unions in only at its internal lookup site.
  */
-export const AUTHOR_PROMPT_VERSION = "2026-08-11.2";
+export const AUTHOR_PROMPT_VERSION = "2026-08-11.3";
 
 /**
  * A fixed, distinctive phrase seeded into the generator's system prompt.
@@ -216,6 +216,12 @@ Size requirements (violating any of these gets the whole scenario rejected):
 - threats: ${SCENARIO_BOUNDS.threats[0]}-${SCENARIO_BOUNDS.threats[1]}
 - mitigations: ${SCENARIO_BOUNDS.mitigations[0]}-${SCENARIO_BOUNDS.mitigations[1]}
 - architectureIssues: ${SCENARIO_BOUNDS.architectureIssues[0]}-${SCENARIO_BOUNDS.architectureIssues[1]}
+
+Before you output, COUNT your threats array and your mitigations array. The single most common
+way this gets rejected is landing one short of the threats/mitigations minimum (${SCENARIO_BOUNDS.threats[0]}
+each) — if you have fewer than ${SCENARIO_BOUNDS.threats[0]} threats or fewer than ${SCENARIO_BOUNDS.mitigations[0]} mitigations, add
+more before responding, not after. Every threat also needs at least one threatMitigations entry
+naming a real mitigation key — a threat with zero mapped mitigations is rejected on its own.
 
 Per-field authoring rules:
 - "provider" on a node is OPTIONAL and applies only to process/service/data_store/queue nodes.
