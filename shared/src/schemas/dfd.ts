@@ -66,6 +66,25 @@ export const dfdGraphSchema = z
     if (new Set(graph.edges.map((e) => e.id)).size !== graph.edges.length) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["edges"], message: "duplicate edge id" });
     }
+
+    // Nodes, edges, and trust boundaries all compile to one draw.io document
+    // (compileToDrawioXml) where every cell shares a single id namespace — a
+    // node and a boundary reusing the same id renders as one mxGraph cell
+    // silently overwriting the other (mxCodec "Duplicate ID"), corrupting
+    // both. Each within-type check above misses this because it only looks
+    // within its own array.
+    const edgeIds = new Set(graph.edges.map((e) => e.id));
+    for (const id of nodeIds) {
+      if (edgeIds.has(id) || boundaryIds.has(id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nodes"], message: `id "${id}" is reused across node/edge/trust-boundary` });
+      }
+    }
+    for (const id of boundaryIds) {
+      if (edgeIds.has(id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["trustBoundaries"], message: `id "${id}" is reused across node/edge/trust-boundary` });
+      }
+    }
+
     for (const edge of graph.edges) {
       for (const end of ["source", "target"] as const) {
         if (!nodeIds.has(edge[end])) {

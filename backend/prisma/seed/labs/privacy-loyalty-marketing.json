@@ -94,7 +94,7 @@
         "type": "data_store",
         "label": "Analytics Warehouse",
         "description": "Business reporting over all transactions",
-        "trustBoundary": "analytics",
+        "trustBoundary": "analytics_boundary",
         "assets": [
           "purchase_history"
         ],
@@ -197,7 +197,7 @@
         "description": "Loyalty and marketing systems"
       },
       {
-        "id": "analytics",
+        "id": "analytics_boundary",
         "label": "Analytics",
         "description": "Secondary-use environment"
       }

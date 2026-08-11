@@ -138,7 +138,7 @@ export type PromptKey = keyof typeof PROMPTS;
  * (stricter) trust rules, so it lives in a separate registry that
  * `AiService` unions in only at its internal lookup site.
  */
-export const AUTHOR_PROMPT_VERSION = "2026-08-11.1";
+export const AUTHOR_PROMPT_VERSION = "2026-08-11.2";
 
 /**
  * A fixed, distinctive phrase seeded into the generator's system prompt.
@@ -170,6 +170,11 @@ OUTPUT RULES:
 - Respond with a single JSON object and nothing else. No prose, no markdown, no code fences.
 - Every "key" you invent (issue key, threat key, mitigation key) must be a short lowercase
   slug, unique within its own array.
+- dfd.nodes, dfd.edges, and dfd.trustBoundaries ids all share ONE namespace when rendered — an id
+  used for a node must never also be used for an edge or a trust boundary (and vice versa), even
+  if they represent the same real-world concept. A node inside a "Private Network" boundary and
+  the boundary itself must get two DIFFERENT ids (e.g. "private_network_svc" vs
+  "private_network_boundary"), never both "private_network".
 - Every affectedNodeIds/affectedEdgeIds value must be an id you defined in dfd.nodes/dfd.edges.
 - Every threatMitigations entry's threatKey/mitigationKey must match a key you defined in
   threats/mitigations. Every threat needs at least one mitigation mapping, or it cannot be graded.`;

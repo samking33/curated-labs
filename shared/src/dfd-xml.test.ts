@@ -267,6 +267,65 @@ describe("extractFromDrawioXml", () => {
   });
 });
 
+// A Playground generation produced a node id equal to a trust boundary id
+// ("private_network" as both). Nodes, edges, and trust boundaries all
+// compile into one draw.io document (compileToDrawioXml) sharing a single
+// mxGraph cell-id namespace, so this rendered as a genuine "Duplicate ID"
+// codec error in the live editor, silently corrupting the boundary. The
+// within-type duplicate checks (see below) never caught it because each
+// only looks at its own array.
+describe("dfdGraphSchema cross-namespace id collisions", () => {
+  it("rejects a node id that collides with a trust boundary id", () => {
+    expect(() =>
+      dfdGraphSchema.parse({
+        version: "1.0",
+        nodes: [{ id: "private_network", type: "process", label: "A" }],
+        edges: [],
+        trustBoundaries: [{ id: "private_network", label: "Private Network", description: "" }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a node id that collides with an edge id", () => {
+    expect(() =>
+      dfdGraphSchema.parse({
+        version: "1.0",
+        nodes: [
+          { id: "shared", type: "process", label: "A" },
+          { id: "b", type: "process", label: "B" },
+        ],
+        edges: [{ id: "shared", source: "shared", target: "b" }],
+        trustBoundaries: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a trust boundary id that collides with an edge id", () => {
+    expect(() =>
+      dfdGraphSchema.parse({
+        version: "1.0",
+        nodes: [
+          { id: "a", type: "process", label: "A" },
+          { id: "b", type: "process", label: "B" },
+        ],
+        edges: [{ id: "shared", source: "a", target: "b" }],
+        trustBoundaries: [{ id: "shared", label: "Boundary", description: "" }],
+      }),
+    ).toThrow();
+  });
+
+  it("still accepts a graph where every id is unique across all three namespaces", () => {
+    expect(() =>
+      dfdGraphSchema.parse({
+        version: "1.0",
+        nodes: [{ id: "a", type: "process", label: "A", trustBoundary: "b1" }],
+        edges: [],
+        trustBoundaries: [{ id: "b1", label: "Boundary", description: "" }],
+      }),
+    ).not.toThrow();
+  });
+});
+
 describe("extractFromDrawioXml against every curated seed DFD", () => {
   const labsDir = path.resolve(__dirname, "../../backend/prisma/seed/labs");
   const files = readdirSync(labsDir).filter((f) => f.endsWith(".json"));
