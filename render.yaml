@@ -1,0 +1,101 @@
+services:
+  - name: curated-labs-api
+    type: web
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: ./backend
+    # corepack pins the exact pnpm version the repo declares (package.json's
+    # "packageManager" field) - Render's Node image ships npm/yarn but not
+    # pnpm by default. db:generate must run explicitly (no postinstall hook)
+    # or the build succeeds with a stale/missing Prisma Client.
+    buildCommand: corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install && pnpm db:generate && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /api/v1/health/live
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ALLOW_DEV_LOGIN
+        value: "false"
+      # WEB_APP_URL/API_BASE_URL/GOOGLE_REDIRECT_URI reference curated-labs-api's
+      # and curated-labs' own predictable *.onrender.com URLs (service names
+      # are fixed above) - swap to a custom domain later if one gets added.
+      - key: WEB_APP_URL
+        value: https://curated-labs.onrender.com
+      - key: API_BASE_URL
+        value: https://curated-labs-api.onrender.com
+      - key: GOOGLE_REDIRECT_URI
+        value: https://curated-labs.onrender.com/api/v1/auth/google/callback
+      - key: NVIDIA_NIM_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: NVIDIA_NIM_MODEL_REASONING
+        value: nvidia/nemotron-3-super-120b-a12b
+      - key: NVIDIA_NIM_MODEL_JSON
+        value: openai/gpt-oss-20b
+      - key: NVIDIA_NIM_MODEL_FAST
+        value: meta/llama-3.1-8b-instruct
+      - key: NVIDIA_NIM_MODEL_EMBEDDING
+        value: nvidia/nv-embedqa-e5-v5
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5
+      - key: AI_MAX_INPUT_TOKENS
+        value: "12000"
+      - key: AI_TIMEOUT_MS
+        value: "25000"
+      - key: AI_RETRY_COUNT
+        value: "1"
+      - key: AI_TASK_BUDGET_MS
+        value: "45000"
+      - key: PLAYGROUND_GEN_MAX_OUTPUT_TOKENS
+        value: "12000"
+      - key: PLAYGROUND_GEN_BUDGET_MS
+        value: "150000"
+      - key: PLAYGROUND_GEN_ATTEMPT_TIMEOUT_MS
+        value: "140000"
+      - key: PLAYGROUND_GEN_PER_USER
+        value: "10"
+      - key: PLAYGROUND_GEN_PER_ORG
+        value: "50"
+      - key: PLAYGROUND_QUOTA_WINDOW_HOURS
+        value: "24"
+      - key: PLAYGROUND_STALE_JOB_MS
+        value: "300000"
+      # Real secrets - Render prompts for these once when the blueprint is
+      # first applied, and they're never written into this file or git.
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: NVIDIA_NIM_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  - name: curated-labs
+    type: web
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: ./frontend
+    # frontend's own build script is just "next build" (it doesn't build the
+    # shared package first the way backend's does), so that's chained here.
+    buildCommand: corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install && pnpm --filter @curated-labs/shared build && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Server-side only - used by next.config.ts's rewrite proxy so the
+      # browser only ever talks to this service's own origin (keeps the
+      # session cookie first-party). Never set NEXT_PUBLIC_API_BASE_URL -
+      # its absence is what makes the browser use a same-origin relative path.
+      - key: API_ORIGIN
+        value: https://curated-labs-api.onrender.com
+      - key: NEXT_PUBLIC_ALLOW_DEV_LOGIN
+        value: "false"
