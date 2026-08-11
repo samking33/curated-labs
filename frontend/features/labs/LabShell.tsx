@@ -149,11 +149,11 @@ export function LabShell({
       setAttemptId(attempt.id);
       // Resume where the learner left off rather than restarting the lab.
       setStep(attempt.currentStep === "intro" ? "architecture_issues" : attempt.currentStep);
-      // Once attemptId is set the DFD panel flips edit -> view and its iframe
-      // reloads from the `lab` prop — but that prop was fetched server-side
-      // when the page first loaded, before any edit made in the edit-mode
-      // panel. Without this, a saved edit looks like it silently reverted
-      // (it's safely in the database, just not in this stale prop).
+      // The DFD panel stays editable across every step (see the `mode` prop
+      // below) — this just keeps the `lab` prop in sync with any edit made
+      // before starting, so a subsequent iframe reload (graph reference
+      // change) never shows stale content next to a save that already made
+      // it to the database.
       router.refresh();
     } catch (err) {
       setError(messageFor(err));
@@ -354,7 +354,10 @@ export function LabShell({
         >
           <DfdEditorFrame
             graph={lab.dfd}
-            mode={dfdSavePath && !attemptId ? "edit" : "view"}
+            // Editable for the whole workflow whenever this scenario has a
+            // save path (Playground only — curated labs never pass
+            // dfdSavePath and stay view-only throughout, as intended).
+            mode={dfdSavePath ? "edit" : "view"}
             onSelectionChange={setSelection}
             onSave={
               dfdSavePath
