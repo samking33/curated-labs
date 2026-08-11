@@ -38,7 +38,7 @@ export function Logo({ size = 34 }: { size?: number }) {
 }
 
 const NAV = [
-  { label: "Dashboard", href: "/app" },
+  { label: "Dashboard", href: "/app/dashboard" },
   { label: "Learn", href: "/app/catalog" },
   { label: "Practice", href: "/app/practice" },
   { label: "Live Classes", href: "/app/live" },
@@ -82,9 +82,8 @@ export function TopNav({
         style={{ display: "flex", alignItems: "center", gap: tokens.space(1), margin: "0 auto" }}
       >
         {NAV.map((item) => {
-          // Exact match for the dashboard root, prefix match for the sections,
-          // so /app/catalog/app-security still lights up "Learn".
-          const active = item.href === "/app" ? pathname === "/app" : pathname.startsWith(item.href);
+          // Prefix match, so /app/catalog/app-security still lights up "Learn".
+          const active = pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
