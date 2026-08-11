@@ -32,12 +32,17 @@ export function GenerateForm() {
   const [error, setError] = useState<string | null>(null);
   const cancelled = useRef(false);
 
-  useEffect(
-    () => () => {
+  // Resetting on mount (not just setting true on cleanup) matters: React
+  // Strict Mode's dev-only mount→cleanup→remount cycle would otherwise leave
+  // this stuck at true forever after the very first render, before the user
+  // ever clicks anything — poll() would then exit on its first line with
+  // busy still true, showing "Generating…" with no request ever sent.
+  useEffect(() => {
+    cancelled.current = false;
+    return () => {
       cancelled.current = true;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const poll = async (jobId: string) => {
     for (let i = 0; i < MAX_POLLS; i++) {
