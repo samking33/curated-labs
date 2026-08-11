@@ -2,7 +2,7 @@
   "name": "curated-labs",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@9.12.0",
+  "packageManager": "pnpm@11.17.0",
   "scripts": {
     "dev": "pnpm --parallel --filter frontend --filter backend dev",
     "dev:frontend": "pnpm --filter frontend dev",
@@ -14,6 +14,8 @@
     "db:migrate": "pnpm --filter backend db:migrate",
     "db:seed": "pnpm --filter backend db:seed",
     "nim:inspect": "node --env-file=.env --experimental-strip-types scripts/nim/inspect-models.ts",
-    "nim:smoke": "node --env-file=.env --experimental-strip-types scripts/nim/smoke-test-models.ts"
+    "nim:smoke": "node --env-file=.env --experimental-strip-types scripts/nim/smoke-test-models.ts",
+    "deploy:backend": "pnpm install && pnpm --filter @curated-labs/backend db:generate && pnpm --filter @curated-labs/backend build",
+    "deploy:frontend": "pnpm install && pnpm --filter @curated-labs/shared build && pnpm --filter frontend build"
   }
 }

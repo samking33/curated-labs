@@ -2,3 +2,15 @@ packages:
   - frontend
   - backend
   - shared
+# pnpm 11 doesn't run a dependency's install/postinstall scripts by default
+# (supply-chain safety) unless it's explicitly trusted here. Without this,
+# Prisma's client generation, sharp's native binary, and esbuild's platform
+# binary would all silently fail to build - not an install error, just
+# broken behavior discovered later.
+allowBuilds:
+  '@nestjs/core': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  sharp: true
