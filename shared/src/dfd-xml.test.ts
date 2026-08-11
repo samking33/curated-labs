@@ -97,6 +97,43 @@ describe("compileToDrawioXml", () => {
     expect(xml).toMatch(/id="b"[^>]*dfdKind="node"[\s\S]{0,100}rounded=0;whiteSpace=wrap;html=1;/);
   });
 
+  it("fans out labels for multiple edges sharing the same source/target column pair", () => {
+    const g = dfdGraphSchema.parse({
+      version: "1.0",
+      nodes: [
+        { id: "a", type: "process", label: "A" },
+        { id: "b1", type: "process", label: "B1" },
+        { id: "b2", type: "process", label: "B2" },
+        { id: "b3", type: "process", label: "B3" },
+      ],
+      edges: [
+        // b1/b2/b3 are all one hop from a, so they land in the same column —
+        // all three edges share one (source column, target column) band.
+        { id: "e1", source: "a", target: "b1", label: "One" },
+        { id: "e2", source: "a", target: "b2", label: "Two" },
+        { id: "e3", source: "a", target: "b3", label: "Three" },
+      ],
+      trustBoundaries: [],
+    });
+    const xml = compileToDrawioXml(g);
+    // Every edge in the band gets a fixed exit/entry point (forward edges)
+    // so their paths fan out instead of all leaving "a" at its center.
+    expect(xml).toMatch(/id="e1"[\s\S]*?exitY=0\.25/);
+    expect(xml).toMatch(/id="e2"[\s\S]*?exitY=0\.50/);
+    expect(xml).toMatch(/id="e3"[\s\S]*?exitY=0\.75/);
+    // And the outer two get a non-zero label offset in opposite directions —
+    // not all three stacked at the same point. (The middle edge's offset is
+    // exactly 0, which correctly emits no <mxPoint> at all — 0 IS "centered".)
+    expect(xml).toMatch(/id="e1"[\s\S]*?<mxPoint x="0" y="-22" as="offset"\/>/);
+    expect(xml).toMatch(/id="e3"[\s\S]*?<mxPoint x="0" y="22" as="offset"\/>/);
+  });
+
+  it("leaves a single edge between a column pair with no fan-out (matches prior output)", () => {
+    const xml = compileToDrawioXml(graph);
+    expect(xml).not.toContain("exitX=1");
+    expect(xml).not.toContain('as="offset"');
+  });
+
   it("ignores provider on non-infrastructure types even if somehow set", () => {
     // dfdNodeSchema doesn't forbid provider on e.g. external_entity at the type level
     // (it's a per-field optional, not cross-field validated) — the COMPILER is what

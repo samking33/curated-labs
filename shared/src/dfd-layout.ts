@@ -1,8 +1,12 @@
 import type { DfdGraph } from "./schemas/dfd";
 
-export const NODE_W = 168;
-export const NODE_H = 88;
-export const LAYOUT_GAPS = { colGap: 120, rowGap: 56 } as const;
+export const NODE_W = 190;
+export const NODE_H = 90;
+// Wide enough that orthogonalEdgeStyle has room to route several edges
+// between the same two columns without their labels stacking on top of each
+// other — see compileToDrawioXml's band-grouping for the label/entry-point
+// fan-out that uses this space.
+export const LAYOUT_GAPS = { colGap: 260, rowGap: 110 } as const;
 
 export type Placed = { id: string; x: number; y: number; w: number; h: number };
 export type Layout = {

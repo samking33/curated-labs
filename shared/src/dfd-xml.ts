@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { LAYOUT_GAPS, NODE_H, NODE_W, layoutGraph } from "./dfd-layout";
+import type { Layout } from "./dfd-layout";
 import { dfdGraphSchema } from "./schemas/dfd";
 import type { DfdGraph, DfdNode, DfdNodeProvider, DfdNodeType } from "./schemas/dfd";
 
@@ -88,6 +89,47 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
+/**
+ * Under the plain layered layout, every edge that runs from one column to
+ * another shares that pair's horizontal band — a node with several outgoing
+ * edges into the same next column stacks their labels (and often their
+ * orthogonal paths) directly on top of each other, illegible past 2-3 edges.
+ * Groups edges by (source column x, target column x) and fans each group
+ * out: a genuine forward edge (source column before target column) gets
+ * staggered exit/entry connection points so the path itself separates, and
+ * every edge in a shared band also gets a vertical label offset so the text
+ * stays readable even where paths still cross (same-column and backward
+ * edges, which don't get a safe fixed exit/entry side).
+ */
+function fanOutEdges(graph: DfdGraph, layout: Layout): Map<string, { connectStyle: string; labelOffsetY: number }> {
+  const groups = new Map<string, DfdGraph["edges"]>();
+  for (const edge of graph.edges) {
+    const s = layout.nodes.get(edge.source);
+    const t = layout.nodes.get(edge.target);
+    if (!s || !t) continue;
+    const key = `${s.x}:${t.x}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(edge);
+  }
+
+  const LABEL_SPACING = 22;
+  const result = new Map<string, { connectStyle: string; labelOffsetY: number }>();
+  for (const group of groups.values()) {
+    const n = group.length;
+    group.forEach((edge, i) => {
+      const s = layout.nodes.get(edge.source)!;
+      const t = layout.nodes.get(edge.target)!;
+      const forward = s.x < t.x;
+      const labelOffsetY = n > 1 ? Math.round((i - (n - 1) / 2) * LABEL_SPACING) : 0;
+      const frac = ((i + 1) / (n + 1)).toFixed(2);
+      const connectStyle =
+        forward && n > 1 ? `exitX=1;exitY=${frac};exitDx=0;exitDy=0;entryX=0;entryY=${frac};entryDx=0;entryDy=0;` : "";
+      result.set(edge.id, { connectStyle, labelOffsetY });
+    });
+  }
+  return result;
+}
+
 /** JSON → draw.io XML. Deterministic — no AI, no parsing library needed for
  *  this direction since we fully control the output shape. */
 export function compileToDrawioXml(graph: DfdGraph): string {
@@ -137,14 +179,19 @@ export function compileToDrawioXml(graph: DfdGraph): string {
     );
   }
 
+  const routing = fanOutEdges(graph, layout);
   for (const edge of graph.edges) {
+    const { connectStyle, labelOffsetY } = routing.get(edge.id) ?? { connectStyle: "", labelOffsetY: 0 };
+    const baseStyle = edge.trustBoundaryCrossing ? EDGE_CROSSING_STYLE : EDGE_STYLE;
     cells.push(
       `<object id="${escapeXml(edge.id)}" label="${escapeXml(edge.label)}" dfdKind="edge" ` +
         `dfdProtocol="${escapeXml(edge.protocol)}" dfdData="${escapeXml(edge.data.map(encodeURIComponent).join(","))}" ` +
         `dfdTrustBoundaryCrossing="${edge.trustBoundaryCrossing ? "1" : "0"}">` +
-        `<mxCell style="${edge.trustBoundaryCrossing ? EDGE_CROSSING_STYLE : EDGE_STYLE}" edge="1" parent="1" ` +
+        `<mxCell style="${baseStyle}${connectStyle}" edge="1" parent="1" ` +
         `source="${escapeXml(edge.source)}" target="${escapeXml(edge.target)}">` +
-        `<mxGeometry relative="1" as="geometry"/>` +
+        (labelOffsetY
+          ? `<mxGeometry relative="1" as="geometry"><mxPoint x="0" y="${labelOffsetY}" as="offset"/></mxGeometry>`
+          : `<mxGeometry relative="1" as="geometry"/>`) +
         `</mxCell></object>`,
     );
   }
