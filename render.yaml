@@ -11,18 +11,20 @@ services:
     # path). db:generate must run explicitly (no postinstall hook) or the
     # build succeeds with a stale/missing Prisma Client.
     #
-    # NODE_ENV=production is deliberately NOT in envVars below - it applies
-    # to the build phase too there, which makes pnpm skip devDependencies
-    # entirely (an inline `NODE_ENV=development pnpm install` prefix on this
-    # line did NOT reliably override that in testing), so typescript never
-    # installs and shared's own "prepare": "tsc" hook fails outright. Setting
-    # it only on startCommand keeps the build phase clean while the actual
-    # running process still sees NODE_ENV=production (cookie secure flag,
-    # the app's own production safety checks).
-    buildCommand: pnpm install && pnpm db:generate && pnpm build
-    startCommand: NODE_ENV=production pnpm start
+    # npm_config_production=false forces pnpm to install devDependencies
+    # regardless of NODE_ENV. Render sets NODE_ENV=production by default for
+    # every Node service - removing it from envVars entirely did NOT stop
+    # this (confirmed live: still injected), and NODE_ENV normally makes
+    # pnpm skip devDependencies outright, so typescript never installed and
+    # shared's own "prepare": "tsc" hook kept failing. This env-var override
+    # is the actual documented pnpm/npm mechanism for decoupling "production
+    # mode" from "skip dev deps" - verified locally before this line existed.
+    buildCommand: npm_config_production=false pnpm install && pnpm db:generate && pnpm build
+    startCommand: pnpm start
     healthCheckPath: /api/v1/health/live
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: ALLOW_DEV_LOGIN
         value: "false"
       # WEB_APP_URL/API_BASE_URL/GOOGLE_REDIRECT_URI reference curated-labs-api's
@@ -93,14 +95,14 @@ services:
     rootDir: ./frontend
     # frontend's own build script is just "next build" (it doesn't build the
     # shared package first the way backend's does), so that's chained here.
-    # No corepack step, and NODE_ENV=production isn't set at the service
-    # level - see curated-labs-api's buildCommand comment for why. Next's own
-    # CLI (next build / next start) already forces the right NODE_ENV
-    # internally regardless of the ambient value, so nothing needed here.
-    buildCommand: pnpm install && pnpm --filter @curated-labs/shared build && pnpm build
+    # No corepack step - see curated-labs-api's buildCommand comment for that
+    # and for why npm_config_production=false is needed here too.
+    buildCommand: npm_config_production=false pnpm install && pnpm --filter @curated-labs/shared build && pnpm build
     startCommand: pnpm start
     healthCheckPath: /login
     envVars:
+      - key: NODE_ENV
+        value: production
       # Server-side only - used by next.config.ts's rewrite proxy so the
       # browser only ever talks to this service's own origin (keeps the
       # session cookie first-party). Never set NEXT_PUBLIC_API_BASE_URL -
