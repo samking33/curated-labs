@@ -1,47 +1,55 @@
 // Single-process entry point for hosts that only support one Node app
-// (e.g. Hostinger). Runs the backend internally on a fixed local port and
-// serves the frontend on the port the host assigns, reusing the existing
-// same-origin rewrite proxy (frontend/next.config.ts) to reach it.
-const { spawn } = require("node:child_process");
+// (e.g. Hostinger). Hosts like this run Node apps under Phusion Passenger,
+// which only recognizes an app as "up" once the process IT directly
+// spawned calls http.createServer().listen() - Passenger patches that
+// exact call. A supervisor that only spawns child processes never makes
+// that call itself, so Passenger considers the app dead and restarts it
+// forever, orphaning children that pile up fighting over the same ports.
+//
+// So Next runs in-process here (its own .listen() is the one Passenger
+// sees), and the backend runs as a child process on a fixed internal port,
+// reached through the same-origin rewrite proxy already configured in
+// frontend/next.config.ts (API_ORIGIN).
 const path = require("node:path");
+const { createServer } = require("node:http");
+const { spawn } = require("node:child_process");
 
 const BACKEND_PORT = "4000";
 const FRONTEND_PORT = process.env.PORT || "3000";
+
+process.env.API_ORIGIN = `http://127.0.0.1:${BACKEND_PORT}`;
 
 const backend = spawn(process.execPath, [path.join(__dirname, "backend/dist/src/main.js")], {
   cwd: path.join(__dirname, "backend"),
   env: { ...process.env, PORT: BACKEND_PORT },
   stdio: "inherit",
 });
-
-// Spawn the underlying next/dist/bin/next JS file directly with node, not
-// the node_modules/.bin/next shell wrapper - hosts that strip the
-// executable bit on publish (Hostinger does) can't exec the wrapper.
-const frontend = spawn(
-  process.execPath,
-  [path.join(__dirname, "frontend/node_modules/next/dist/bin/next"), "start", "-p", FRONTEND_PORT],
-  {
-    cwd: path.join(__dirname, "frontend"),
-    env: { ...process.env, PORT: FRONTEND_PORT, API_ORIGIN: `http://127.0.0.1:${BACKEND_PORT}` },
-    stdio: "inherit",
-  },
-);
-
-function shutdown() {
-  backend.kill();
-  frontend.kill();
-}
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-
-// If either child dies, the app is broken - exit so the host restarts us.
 backend.on("exit", (code) => {
   console.error(`backend exited (${code})`);
-  frontend.kill();
   process.exit(code ?? 1);
 });
-frontend.on("exit", (code) => {
-  console.error(`frontend exited (${code})`);
+
+const next = require(path.join(__dirname, "frontend/node_modules/next"));
+const app = next({ dev: false, dir: path.join(__dirname, "frontend") });
+const handle = app.getRequestHandler();
+
+app
+  .prepare()
+  .then(() => {
+    createServer((req, res) => handle(req, res)).listen(FRONTEND_PORT, () => {
+      console.log(`ready on ${FRONTEND_PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("next failed to prepare", err);
+    process.exit(1);
+  });
+
+process.on("SIGTERM", () => {
   backend.kill();
-  process.exit(code ?? 1);
+  process.exit();
+});
+process.on("SIGINT", () => {
+  backend.kill();
+  process.exit();
 });
