@@ -19,9 +19,21 @@ const FRONTEND_PORT = process.env.PORT || "3000";
 
 process.env.API_ORIGIN = `http://127.0.0.1:${BACKEND_PORT}`;
 
+// Passenger sets NODE_ENV=production for every Node app by default,
+// unconditionally - but next build needs NODE_ENV=production (handled in
+// package.json's build script) while the backend refuses to boot with
+// ALLOW_DEV_LOGIN=true under NODE_ENV=production (backend/src/config/index.ts).
+// Turning on dev login is itself the signal that this isn't real production,
+// so it overrides Passenger's default here rather than needing a second
+// env var juggled by hand in the host's dashboard.
+const backendEnv = { ...process.env, PORT: BACKEND_PORT };
+if (backendEnv.ALLOW_DEV_LOGIN === "true" && backendEnv.NODE_ENV === "production") {
+  backendEnv.NODE_ENV = "development";
+}
+
 const backend = spawn(process.execPath, [path.join(__dirname, "backend/dist/src/main.js")], {
   cwd: path.join(__dirname, "backend"),
-  env: { ...process.env, PORT: BACKEND_PORT },
+  env: backendEnv,
   stdio: "inherit",
 });
 backend.on("exit", (code) => {

@@ -7,7 +7,7 @@
     "dev": "pnpm --parallel --filter frontend --filter backend dev",
     "dev:frontend": "pnpm --filter frontend dev",
     "dev:backend": "pnpm --filter backend dev",
-    "build": "cd backend && npm run build && cd ../frontend && npm run build",
+    "build": "cd backend && npm run build && cd ../frontend && NODE_ENV=production npm run build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
