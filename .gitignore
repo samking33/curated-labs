@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .next/
+.deploy-tmp/
 *.tsbuildinfo
 
 # Secrets. .env.example is the committed template.

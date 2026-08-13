@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && rm -rf .deploy-tmp && pnpm --filter frontend deploy --legacy .deploy-tmp && rm -rf node_modules && mv .deploy-tmp/node_modules node_modules && rm -rf .deploy-tmp",
     "start": "next start",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
