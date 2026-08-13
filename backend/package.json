@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter @curated-labs/shared build && nest start --watch",
-    "build": "prisma generate && pnpm --filter @curated-labs/shared build && nest build",
+    "build": "prisma generate && nest build",
     "start": "node dist/src/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
