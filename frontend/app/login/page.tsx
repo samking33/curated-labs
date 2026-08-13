@@ -30,27 +30,29 @@ export default async function LoginPage({
           </div>
         )}
 
-        <a
-          href={href}
-          style={{
-            display: "block",
-            padding: tokens.space(3),
-            background: tokens.color.accent,
-            color: tokens.color.accentText,
-            borderRadius: tokens.radius.md,
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          Continue with Google
-        </a>
+        {process.env.NEXT_PUBLIC_ALLOW_DEV_LOGIN === "true" ? (
+          // Google OIDC has no credentials configured yet - dev login is the
+          // only working sign-in path for now, so it's the primary action.
+          <DevLogin returnTo={returnTo ?? "/app"} primary />
+        ) : (
+          <a
+            href={href}
+            style={{
+              display: "block",
+              padding: tokens.space(3),
+              background: tokens.color.accent,
+              color: tokens.color.accentText,
+              borderRadius: tokens.radius.md,
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
+          >
+            Continue with Google
+          </a>
+        )}
         <p style={{ marginTop: tokens.space(5), fontSize: tokens.size.xs, color: tokens.color.textFaint }}>
           No grades, no certificates. Just practice.
         </p>
-
-        {process.env.NEXT_PUBLIC_ALLOW_DEV_LOGIN === "true" && (
-          <DevLogin returnTo={returnTo ?? "/app"} />
-        )}
       </div>
     </main>
   );

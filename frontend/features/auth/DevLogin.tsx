@@ -12,7 +12,7 @@ import { tokens } from "@/lib/tokens";
  * loadConfig() refuses to allow in production. Two independent switches, both
  * off by default.
  */
-export function DevLogin({ returnTo }: { returnTo: string }) {
+export function DevLogin({ returnTo, primary = false }: { returnTo: string; primary?: boolean }) {
   const [email, setEmail] = useState("learner@example.com");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function DevLogin({ returnTo }: { returnTo: string }) {
   };
 
   return (
-    <div style={{ marginTop: tokens.space(6), paddingTop: tokens.space(5), borderTop: `1px solid ${tokens.color.border}` }}>
+    <div style={primary ? undefined : { marginTop: tokens.space(6), paddingTop: tokens.space(5), borderTop: `1px solid ${tokens.color.border}` }}>
       <div style={{ fontSize: tokens.size.xs, color: tokens.color.warning, textTransform: "uppercase", letterSpacing: 1, marginBottom: tokens.space(3) }}>
         Local development only
       </div>
