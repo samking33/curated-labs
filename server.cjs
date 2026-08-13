@@ -14,9 +14,12 @@ const backend = spawn(process.execPath, [path.join(__dirname, "backend/dist/src/
   stdio: "inherit",
 });
 
+// Spawn the underlying next/dist/bin/next JS file directly with node, not
+// the node_modules/.bin/next shell wrapper - hosts that strip the
+// executable bit on publish (Hostinger does) can't exec the wrapper.
 const frontend = spawn(
-  path.join(__dirname, "frontend/node_modules/.bin/next"),
-  ["start", "-p", FRONTEND_PORT],
+  process.execPath,
+  [path.join(__dirname, "frontend/node_modules/next/dist/bin/next"), "start", "-p", FRONTEND_PORT],
   {
     cwd: path.join(__dirname, "frontend"),
     env: { ...process.env, PORT: FRONTEND_PORT, API_ORIGIN: `http://127.0.0.1:${BACKEND_PORT}` },
