@@ -11,7 +11,7 @@
 // reached through the same-origin rewrite proxy already configured in
 // frontend/next.config.ts (API_ORIGIN).
 const path = require("node:path");
-const { createServer } = require("node:http");
+const http = require("node:http");
 const { spawn } = require("node:child_process");
 
 const BACKEND_PORT = "4000";
@@ -29,21 +29,42 @@ backend.on("exit", (code) => {
   process.exit(code ?? 1);
 });
 
-const next = require(path.join(__dirname, "frontend/node_modules/next"));
-const app = next({ dev: false, dir: path.join(__dirname, "frontend") });
-const handle = app.getRequestHandler();
-
-app
-  .prepare()
-  .then(() => {
-    createServer((req, res) => handle(req, res)).listen(FRONTEND_PORT, () => {
-      console.log(`ready on ${FRONTEND_PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error("next failed to prepare", err);
-    process.exit(1);
+// Prisma's native query engine has been seen panicking ("timer has gone
+// away", a tokio/CPU-starvation symptom) when it connects to the database
+// at the same moment Next is doing its own CPU-heavy startup compilation.
+// Waiting for the backend to report healthy before starting Next's
+// prepare() keeps the two startups from fighting over CPU at once.
+function waitForBackend() {
+  return new Promise((resolve) => {
+    const attempt = () => {
+      const req = http.get({ host: "127.0.0.1", port: BACKEND_PORT, path: "/api/v1/health/live" }, (res) => {
+        res.resume();
+        if (res.statusCode === 200) resolve();
+        else setTimeout(attempt, 500);
+      });
+      req.on("error", () => setTimeout(attempt, 500));
+    };
+    attempt();
   });
+}
+
+waitForBackend().then(() => {
+  const next = require(path.join(__dirname, "frontend/node_modules/next"));
+  const app = next({ dev: false, dir: path.join(__dirname, "frontend") });
+  const handle = app.getRequestHandler();
+
+  app
+    .prepare()
+    .then(() => {
+      http.createServer((req, res) => handle(req, res)).listen(FRONTEND_PORT, () => {
+        console.log(`ready on ${FRONTEND_PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error("next failed to prepare", err);
+      process.exit(1);
+    });
+});
 
 process.on("SIGTERM", () => {
   backend.kill();
