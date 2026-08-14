@@ -32,6 +32,25 @@ if (backendEnv.ALLOW_DEV_LOGIN === "true" && backendEnv.NODE_ENV === "production
 }
 
 /*
+ * Cap the backend's thread pools.
+ *
+ * Prisma's Rust engine sizes its tokio worker pool from the CPU count, and
+ * the production host reports 64 CPUs while the account gets a far smaller
+ * share of tasks. Measured there: the backend alone held 74 of ~114
+ * available tasks, the engine aborted outright ("Aborted (core dumped)")
+ * because it could not build that pool, and nothing on the account could
+ * fork afterwards (`spawn EAGAIN`) — which is what kept taking the whole
+ * site down. With these two caps the same backend starts in 12 threads and
+ * serves normally; verified directly on the host, both ways.
+ *
+ * Set here rather than in the app because libuv reads UV_THREADPOOL_SIZE
+ * once at process start, so it has to be in the child's environment. Both
+ * defer to a value already set in the environment.
+ */
+backendEnv.TOKIO_WORKER_THREADS = backendEnv.TOKIO_WORKER_THREADS || "2";
+backendEnv.UV_THREADPOOL_SIZE = backendEnv.UV_THREADPOOL_SIZE || "2";
+
+/*
  * Supervise the backend rather than dying with it.
  *
  * Prisma's native query engine panics on this host ("timer has gone away",
