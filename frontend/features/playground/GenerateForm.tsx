@@ -18,11 +18,13 @@ const POLL_MS = 2000;
 // success taking 196s, already past the old 180s cap — 6 minutes gives
 // real margin above the worst realistic case instead of just the typical one.
 const MAX_POLLS = 180;
-// Calibration point for the progress bar's asymptotic curve, from the same
-// dry run: observed single-attempt completions ranged ~70-196s. Not a
-// guarantee, just where the curve should be visually "most of the way
-// there" — real completion always drives the actual 100%, never this timer.
-const EXPECTED_MS = 110_000;
+// Calibration point for the progress bar's asymptotic curve. Measured end to
+// end against the real model: 70s, 94s, 196s and 230s. Tuned to the slow end
+// of that rather than the median — a bar that reaches 75% and crawls reads as
+// stuck, which is exactly how a working 230s generation got reported as
+// "playground is not accessible". Real completion always drives the actual
+// 100%, never this timer.
+const EXPECTED_MS = 190_000;
 const PROGRESS_CAP = 92;
 
 /**
@@ -41,6 +43,7 @@ export function GenerateForm() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const cancelled = useRef(false);
   const startedAt = useRef(0);
@@ -53,8 +56,9 @@ export function GenerateForm() {
   useEffect(() => {
     if (!busy) return;
     const tick = () => {
-      const elapsed = Date.now() - startedAt.current;
-      setProgress(PROGRESS_CAP * (1 - Math.exp(-elapsed / EXPECTED_MS)));
+      const ms = Date.now() - startedAt.current;
+      setProgress(PROGRESS_CAP * (1 - Math.exp(-ms / EXPECTED_MS)));
+      setElapsed(Math.floor(ms / 1000));
     };
     tick();
     const id = setInterval(tick, 200);
@@ -87,7 +91,13 @@ export function GenerateForm() {
         setBusy(false);
         return;
       }
-      setStatus(job.status === "running" ? "Generating your scenario — this can take a minute or two…" : "Queued…");
+      // Honest about the real duration. Measured runs took 70-230s, so
+      // "a minute or two" made a working generation look hung.
+      setStatus(
+        job.status === "running"
+          ? "Building your scenario — this usually takes 2–4 minutes. You can leave this tab open."
+          : "Queued…",
+      );
       await sleep(POLL_MS);
     }
     setError("This is taking longer than expected. Try again in a bit.");
@@ -170,6 +180,11 @@ export function GenerateForm() {
                 transition: "width 200ms linear",
               }}
             />
+          </div>
+          {/* A ticking clock is the clearest proof it is still working — the
+              bar alone moves too slowly late on to look alive. */}
+          <div style={{ fontSize: tokens.size.xs, color: tokens.color.textFaint }}>
+            {Math.floor(elapsed / 60)}m {String(elapsed % 60).padStart(2, "0")}s elapsed
           </div>
         </div>
       )}
