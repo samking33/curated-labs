@@ -50,28 +50,54 @@ let backend = null;
 let restarts = 0;
 let shuttingDown = false;
 
+function scheduleRestart(reason, startedAt) {
+  if (shuttingDown) return;
+  // A process that ran a while before dying is a fresh fault, not a boot
+  // loop — don't let an old streak inflate its backoff.
+  if (Date.now() - startedAt > STABLE_MS) restarts = 0;
+  const delay = Math.min(RESTART_BASE_MS * 2 ** restarts, RESTART_MAX_MS);
+  restarts += 1;
+  console.error(`backend ${reason} — restarting in ${delay}ms (attempt ${restarts})`);
+  // Deliberately NOT unref'd: until Next is listening there is nothing else
+  // holding the event loop open, so an unref'd timer here lets the whole
+  // supervisor exit the moment the backend dies during startup — the exact
+  // outage this is meant to prevent.
+  setTimeout(startBackend, delay);
+}
+
 function startBackend() {
   const startedAt = Date.now();
-  backend = spawn(process.execPath, [path.join(__dirname, "backend/dist/src/main.js")], {
-    cwd: path.join(__dirname, "backend"),
-    env: backendEnv,
-    stdio: "inherit",
-  });
+  let settled = false;
+  const settle = (reason) => {
+    if (settled) return;
+    settled = true;
+    scheduleRestart(reason, startedAt);
+  };
 
-  backend.on("exit", (code) => {
-    if (shuttingDown) return;
-    // A process that ran a while before dying is a fresh fault, not a boot
-    // loop — don't let an old streak inflate its backoff.
-    if (Date.now() - startedAt > STABLE_MS) restarts = 0;
-    const delay = Math.min(RESTART_BASE_MS * 2 ** restarts, RESTART_MAX_MS);
-    restarts += 1;
-    console.error(`backend exited (${code}) — restarting in ${delay}ms (attempt ${restarts})`);
-    // Deliberately NOT unref'd: until Next is listening there is nothing else
-    // holding the event loop open, so an unref'd timer here lets the whole
-    // supervisor exit the moment the backend dies during startup — the exact
-    // outage this is meant to prevent.
-    setTimeout(startBackend, delay);
-  });
+  let child;
+  try {
+    child = spawn(process.execPath, [path.join(__dirname, "backend/dist/src/main.js")], {
+      cwd: path.join(__dirname, "backend"),
+      env: backendEnv,
+      stdio: "inherit",
+    });
+  } catch (err) {
+    // spawn can throw synchronously as well as emit "error".
+    settle(`could not be spawned (${err.code || err.message})`);
+    return;
+  }
+  backend = child;
+
+  /*
+   * An unhandled "error" event on a ChildProcess THROWS, which would kill
+   * this supervisor and take the site down with it — the exact outage it
+   * exists to prevent. Seen in production as `spawn ... EAGAIN`: the shared
+   * host refused to fork because the account was at its process limit, the
+   * error event went unhandled, and the whole app died. A failed spawn is
+   * just another reason to back off and retry.
+   */
+  child.on("error", (err) => settle(`failed to spawn (${err.code || err.message})`));
+  child.on("exit", (code) => settle(`exited (${code})`));
 }
 
 startBackend();
@@ -133,3 +159,17 @@ function shutdown() {
 }
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+
+/*
+ * A child does not die with its parent on POSIX. Whenever this supervisor
+ * went away without killing it — an uncaught throw, Passenger tearing the
+ * app down — the backend was left orphaned still holding the internal port,
+ * so the next boot's backend could not bind and the app never recovered.
+ * Seen live with a backend from a previous version still running hours
+ * later. "exit" covers every path that unwinds normally; SIGKILL cannot be
+ * trapped by anything, here or elsewhere.
+ */
+process.on("exit", () => {
+  shuttingDown = true;
+  if (backend) backend.kill();
+});
