@@ -31,27 +31,68 @@ if (backendEnv.ALLOW_DEV_LOGIN === "true" && backendEnv.NODE_ENV === "production
   backendEnv.NODE_ENV = "development";
 }
 
-const backend = spawn(process.execPath, [path.join(__dirname, "backend/dist/src/main.js")], {
-  cwd: path.join(__dirname, "backend"),
-  env: backendEnv,
-  stdio: "inherit",
-});
-backend.on("exit", (code) => {
-  console.error(`backend exited (${code})`);
-  process.exit(code ?? 1);
-});
+/*
+ * Supervise the backend rather than dying with it.
+ *
+ * Prisma's native query engine panics on this host ("timer has gone away",
+ * a tokio timer-thread symptom under CPU/thread pressure) and it surfaces as
+ * an unhandled rejection inside the engine, so the backend cannot catch it
+ * and simply exits. Exiting the supervisor too turned one child crash into a
+ * whole-site outage: Passenger restarts the app, the backend panics again on
+ * the next boot, and every request 503s. Restarting just the child, with
+ * backoff, keeps the site up and lets a transient panic heal itself.
+ */
+const RESTART_BASE_MS = 1000;
+const RESTART_MAX_MS = 30_000;
+const STABLE_MS = 60_000;
 
-// Prisma's native query engine has been seen panicking ("timer has gone
-// away", a tokio/CPU-starvation symptom) when it connects to the database
-// at the same moment Next is doing its own CPU-heavy startup compilation.
-// Waiting for the backend to report healthy before starting Next's
-// prepare() keeps the two startups from fighting over CPU at once.
-function waitForBackend() {
+let backend = null;
+let restarts = 0;
+let shuttingDown = false;
+
+function startBackend() {
+  const startedAt = Date.now();
+  backend = spawn(process.execPath, [path.join(__dirname, "backend/dist/src/main.js")], {
+    cwd: path.join(__dirname, "backend"),
+    env: backendEnv,
+    stdio: "inherit",
+  });
+
+  backend.on("exit", (code) => {
+    if (shuttingDown) return;
+    // A process that ran a while before dying is a fresh fault, not a boot
+    // loop — don't let an old streak inflate its backoff.
+    if (Date.now() - startedAt > STABLE_MS) restarts = 0;
+    const delay = Math.min(RESTART_BASE_MS * 2 ** restarts, RESTART_MAX_MS);
+    restarts += 1;
+    console.error(`backend exited (${code}) — restarting in ${delay}ms (attempt ${restarts})`);
+    // Deliberately NOT unref'd: until Next is listening there is nothing else
+    // holding the event loop open, so an unref'd timer here lets the whole
+    // supervisor exit the moment the backend dies during startup — the exact
+    // outage this is meant to prevent.
+    setTimeout(startBackend, delay);
+  });
+}
+
+startBackend();
+
+/**
+ * Resolves once the backend answers, or after `timeoutMs` regardless.
+ *
+ * The timeout is the important half: Next only calls listen() after this
+ * resolves, and that listen() is the single thing Passenger watches to
+ * decide the app is up. Waiting forever for a backend that keeps panicking
+ * therefore took the entire site down — including every page that needs no
+ * database at all. Starting Next anyway degrades the API only.
+ */
+function waitForBackend(timeoutMs) {
   return new Promise((resolve) => {
+    const deadline = Date.now() + timeoutMs;
     const attempt = () => {
+      if (Date.now() > deadline) return resolve(false);
       const req = http.get({ host: "127.0.0.1", port: BACKEND_PORT, path: "/api/v1/health/live" }, (res) => {
         res.resume();
-        if (res.statusCode === 200) resolve();
+        if (res.statusCode === 200) resolve(true);
         else setTimeout(attempt, 500);
       });
       req.on("error", () => setTimeout(attempt, 500));
@@ -60,7 +101,12 @@ function waitForBackend() {
   });
 }
 
-waitForBackend().then(() => {
+// Letting the backend settle first also keeps its Prisma connect from
+// competing with Next's own CPU-heavy startup, which is what provoked the
+// panic in the first place.
+waitForBackend(60_000).then((healthy) => {
+  if (!healthy) console.error("backend not healthy yet — starting frontend anyway so the site serves");
+
   const next = require(path.join(__dirname, "frontend/node_modules/next"));
   const app = next({ dev: false, dir: path.join(__dirname, "frontend") });
   const handle = app.getRequestHandler();
@@ -73,16 +119,17 @@ waitForBackend().then(() => {
       });
     })
     .catch((err) => {
+      // Next failing to prepare is not recoverable by retrying here, and
+      // without it there is nothing to serve — let Passenger restart us.
       console.error("next failed to prepare", err);
       process.exit(1);
     });
 });
 
-process.on("SIGTERM", () => {
-  backend.kill();
+function shutdown() {
+  shuttingDown = true;
+  if (backend) backend.kill();
   process.exit();
-});
-process.on("SIGINT", () => {
-  backend.kill();
-  process.exit();
-});
+}
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
