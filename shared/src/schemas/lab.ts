@@ -155,6 +155,16 @@ export function validateSeedReferences(seed: LabSeed): string[] {
       errors.push(`threat ${threat.key} has no mitigation mapping`);
     }
   }
+  // Every node needs a trust zone, or the diagram reads as unfinished next
+  // to every other lab. Enforced here (not just requested in the generator
+  // prompt) so a scenario the model half-completes gets rejected outright
+  // rather than shipping with an unassigned node.
+  for (const node of seed.dfd.nodes) {
+    if (!node.trustBoundary) errors.push(`node ${node.id} has no trustBoundary assigned`);
+  }
+  if (seed.dfd.nodes.length > 0 && seed.dfd.trustBoundaries.length === 0) {
+    errors.push("dfd has nodes but no trustBoundaries defined");
+  }
   const duplicateKeys = (keys: string[]) => keys.filter((k, i) => keys.indexOf(k) !== i);
   for (const dup of duplicateKeys(seed.threats.map((t) => t.key))) errors.push(`duplicate threat key "${dup}"`);
   for (const dup of duplicateKeys(seed.mitigations.map((m) => m.key))) {

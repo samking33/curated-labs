@@ -360,28 +360,34 @@ function MiniChat({
       >
         {chat.turns.length === 0 && (
           <p style={{ margin: 0, fontSize: tokens.size.sm, color: tokens.color.textMuted, lineHeight: 1.55 }}>
-            Ask me about the diagram, a step you&apos;re stuck on, or threat modeling in general.
+            Ask me about a step you&apos;re stuck on, or threat modeling in general — I know which
+            lab or scenario you&apos;re on, not the specific diagram or your answers.
           </p>
         )}
         {chat.turns.map((t, i) => (
-          <p
-            key={i}
-            style={{
-              margin: 0,
-              justifySelf: t.role === "user" ? "end" : "start",
-              maxWidth: "88%",
-              padding: `${tokens.space(2)} ${tokens.space(3)}`,
-              borderRadius: 14,
-              background: t.role === "user" ? tokens.color.accent : tokens.color.surfaceSunken,
-              color: t.role === "user" ? tokens.color.accentText : tokens.color.text,
-              fontSize: tokens.size.sm,
-              lineHeight: 1.5,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-            }}
-          >
-            {t.content}
-          </p>
+          <div key={i} style={{ justifySelf: t.role === "user" ? "end" : "start", maxWidth: "88%" }}>
+            {t.degraded && (
+              <div style={{ fontSize: tokens.size.xs, color: tokens.color.warning, marginBottom: 2 }}>
+                Coach unavailable — not a real answer
+              </div>
+            )}
+            <p
+              style={{
+                margin: 0,
+                padding: `${tokens.space(2)} ${tokens.space(3)}`,
+                borderRadius: 14,
+                background: t.role === "user" ? tokens.color.accent : tokens.color.surfaceSunken,
+                color: t.role === "user" ? tokens.color.accentText : tokens.color.text,
+                border: t.degraded ? `1px dashed ${tokens.color.warning}` : undefined,
+                fontSize: tokens.size.sm,
+                lineHeight: 1.5,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {t.content}
+            </p>
+          </div>
         ))}
         {chat.thinking && (
           <span style={{ fontSize: tokens.size.sm, color: tokens.color.textFaint }}>thinking…</span>

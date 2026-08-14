@@ -58,6 +58,16 @@ describe("embedUrl", () => {
     expect(url).not.toContain("chrome=");
   });
 
+  // addEmbedButtons (grepped from app.min.js) gates its floating Save/Exit
+  // buttons on embed=1 alone, not on chromeless — present in both modes
+  // unless explicitly suppressed. This app never uses them.
+  it("suppresses the floating Save/Exit embed buttons in both modes", () => {
+    expect(embedUrl("view")).toContain("noSaveBtn=1");
+    expect(embedUrl("view")).toContain("noExitBtn=1");
+    expect(embedUrl("edit")).toContain("noSaveBtn=1");
+    expect(embedUrl("edit")).toContain("noExitBtn=1");
+  });
+
   // clibs=U<url> is how the vendored build's App.prototype.restoreLibraries
   // auto-opens a URL-backed custom shape library at startup (see the
   // comment on embedUrl() for the grep evidence). Only needed in edit mode

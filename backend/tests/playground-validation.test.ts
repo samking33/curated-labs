@@ -26,17 +26,20 @@ function baseDraft(overrides: Partial<PlaygroundScenarioDraft> = {}): Playground
     dfd: {
       version: "1.0",
       nodes: [
-        { id: "n1", type: "external_entity" as const, label: "Customer" },
-        { id: "n2", type: "process" as const, label: "API" },
-        { id: "n3", type: "data_store" as const, label: "DB" },
-        { id: "n4", type: "third_party" as const, label: "Processor" },
+        { id: "n1", type: "external_entity" as const, label: "Customer", trustBoundary: "internet" },
+        { id: "n2", type: "process" as const, label: "API", trustBoundary: "private" },
+        { id: "n3", type: "data_store" as const, label: "DB", trustBoundary: "private" },
+        { id: "n4", type: "third_party" as const, label: "Processor", trustBoundary: "internet" },
       ],
       edges: [
         { id: "e1", source: "n1", target: "n2" },
         { id: "e2", source: "n2", target: "n3" },
         { id: "e3", source: "n2", target: "n4" },
       ],
-      trustBoundaries: [],
+      trustBoundaries: [
+        { id: "internet", label: "Internet", description: "" },
+        { id: "private", label: "Private Network", description: "" },
+      ],
     },
     architectureIssues: [
       { key: "ai1", title: "No rate limiting", description: "d", affectedNodeIds: ["n2"] },

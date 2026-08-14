@@ -2,12 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { tokens } from "@/lib/tokens";
-import { api } from "@/lib/api";
 import { card } from "./PerformanceCard";
 import { SparkleIcon } from "./Chrome";
 import { VoiceField } from "./VoiceField";
-
-type Turn = { role: "user" | "assistant"; content: string };
+import { useCoachChat, type Turn } from "../assistant/useCoachChat";
 
 const SUGGESTIONS = [
   "Where should I start?",
@@ -29,10 +27,8 @@ export function AiAssistantCard({
   onOpenProgress?: () => void;
   greeting?: string;
 }) {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const chat = useCoachChat();
   const [draft, setDraft] = useState("");
-  const [thinking, setThinking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -40,37 +36,15 @@ export function AiAssistantCard({
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [turns, thinking]);
+  }, [chat.turns, chat.thinking]);
 
-  const send = async (text: string) => {
-    const content = text.trim();
-    if (!content || thinking) return;
-
-    // Optimistic: the learner's own message is not worth a round trip to show.
-    const next = [...turns, { role: "user" as const, content }];
-    setTurns(next);
+  const send = (text: string) => {
+    if (!text.trim() || chat.thinking) return;
+    void chat.send(text).finally(() => inputRef.current?.focus());
     setDraft("");
-    setError(null);
-    setThinking(true);
-
-    try {
-      const res = await api<{ reply: string; degraded: boolean }>("/assistant/chat", {
-        method: "POST",
-        // Send the whole visible transcript so follow-ups keep their thread;
-        // the server caps how much of it actually reaches the model.
-        body: JSON.stringify({ messages: next }),
-      });
-      setTurns([...next, { role: "assistant", content: res.reply }]);
-    } catch {
-      // The learner's question stays on screen — only the reply is missing.
-      setError("Couldn't reach the coach. Try again.");
-    } finally {
-      setThinking(false);
-      inputRef.current?.focus();
-    }
   };
 
-  const empty = turns.length === 0;
+  const empty = chat.turns.length === 0;
 
   return (
     <section
@@ -94,8 +68,8 @@ export function AiAssistantCard({
         <h2 style={{ margin: 0, flex: 1, fontSize: tokens.size.xl, fontWeight: 500, color: tokens.color.text }}>
           Ai Assistant
         </h2>
-        {turns.length > 0 && (
-          <IconButton label="Clear conversation" onClick={() => { setTurns([]); setError(null); }}>
+        {chat.turns.length > 0 && (
+          <IconButton label="Clear conversation" onClick={chat.reset}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path d="M4 7h16M9.5 7V5h5v2M6.5 7l1 12h9l1-12" stroke={tokens.color.text} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -134,7 +108,7 @@ export function AiAssistantCard({
         {empty ? (
           <>
             {/* The field is the assistant's resting presence. */}
-            <VoiceField size={230} listening={thinking} />
+            <VoiceField size={230} listening={chat.thinking} />
             <p
               style={{
                 margin: 0,
@@ -150,13 +124,13 @@ export function AiAssistantCard({
             </p>
           </>
         ) : (
-          turns.map((t, i) => <Bubble key={i} turn={t} />)
+          chat.turns.map((t, i) => <Bubble key={i} turn={t} />)
         )}
 
-        {thinking && !empty && <Typing />}
-        {error && (
+        {chat.thinking && !empty && <Typing />}
+        {chat.error && (
           <p role="alert" style={{ margin: 0, fontSize: tokens.size.sm, color: tokens.color.danger }}>
-            {error}
+            {chat.error}
           </p>
         )}
       </div>
@@ -227,7 +201,7 @@ export function AiAssistantCard({
         />
         <button
           type="submit"
-          disabled={!draft.trim() || thinking}
+          disabled={!draft.trim() || chat.thinking}
           aria-label="Send message"
           style={{
             width: 46,
@@ -235,8 +209,8 @@ export function AiAssistantCard({
             flexShrink: 0,
             borderRadius: "50%",
             border: "none",
-            background: draft.trim() && !thinking ? tokens.color.accent : tokens.color.borderStrong,
-            cursor: draft.trim() && !thinking ? "pointer" : "default",
+            background: draft.trim() && !chat.thinking ? tokens.color.accent : tokens.color.borderStrong,
+            cursor: draft.trim() && !chat.thinking ? "pointer" : "default",
             display: "grid",
             placeItems: "center",
             transition: "background 120ms",
@@ -254,7 +228,12 @@ export function AiAssistantCard({
 function Bubble({ turn }: { turn: Turn }) {
   const mine = turn.role === "user";
   return (
-    <div style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start" }}>
+      {turn.degraded && (
+        <span style={{ fontSize: tokens.size.xs, color: tokens.color.warning, marginBottom: 2 }}>
+          Coach unavailable — not a real answer
+        </span>
+      )}
       <p
         style={{
           margin: 0,
@@ -265,6 +244,7 @@ function Bubble({ turn }: { turn: Turn }) {
           borderBottomLeftRadius: mine ? tokens.radius.lg : tokens.radius.sm,
           background: mine ? tokens.color.accent : tokens.color.surfaceSunken,
           color: mine ? tokens.color.accentText : tokens.color.text,
+          border: turn.degraded ? `1px dashed ${tokens.color.warning}` : undefined,
           fontSize: tokens.size.base,
           lineHeight: 1.5,
           whiteSpace: "pre-wrap",

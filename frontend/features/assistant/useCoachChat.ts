@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
 
-export type Turn = { role: "user" | "assistant"; content: string };
+export type Turn = { role: "user" | "assistant"; content: string; degraded?: boolean };
 
 /**
  * Conversation state for the coach.
@@ -33,7 +33,7 @@ export function useCoachChat() {
           method: "POST",
           body: JSON.stringify({ messages: next }),
         });
-        setTurns([...next, { role: "assistant", content: res.reply }]);
+        setTurns([...next, { role: "assistant", content: res.reply, degraded: res.degraded }]);
       } catch {
         // The question stays on screen — only the reply is missing.
         setError("Couldn't reach the coach. Try again.");

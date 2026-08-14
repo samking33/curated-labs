@@ -85,12 +85,21 @@ const PROVIDER_LIBRARY_KEY: Record<"aws" | "azure" | "gcp", string[]> = {
   gcp: ["gcp3", "gcp2"],
 };
 
+/** `addEmbedButtons` (grepped from app.min.js) gates its floating "Save"/
+ *  "Exit" buttons on `embed=1` alone, not on `chromeless` — they'd render
+ *  over the canvas in BOTH modes otherwise. This app never uses them: view
+ *  mode has nothing to save, and the app's own onSave callback + page chrome
+ *  (e.g. "Back to catalog") already cover save/exit. `urlParams.noSaveBtn`
+ *  and `urlParams.noExitBtn` are real, confirmed-present gates in the
+ *  vendored bundle (grepped directly, not assumed from public docs). */
 export function embedUrl(mode: "view" | "edit", origin = "", providers: ("aws" | "azure" | "gcp")[] = []): string {
   const params = new URLSearchParams({
     embed: "1",
     proto: "json",
     spin: "1",
     libraries: "1",
+    noSaveBtn: "1",
+    noExitBtn: "1",
     ...(mode === "view" ? { chrome: "0" } : { clibs: `U${origin}${DFD_SHAPE_LIBRARY_URL}` }),
   });
   if (mode === "edit" && providers.length > 0) {

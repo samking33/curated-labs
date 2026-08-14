@@ -37,6 +37,35 @@
     var graph = ui.editor && ui.editor.graph;
     if (!graph || !graph.getSelectionModel) return;
 
+    // Edit mode only - view mode is chromeless (no menu bar to begin with).
+    // The Help menu is built from exactly ["keyboardShortcuts", "-",
+    // "about"] in this vendored build (grepped from app.min.js) - both
+    // entries link out to diagrams.net/GitHub or show the mxGraph "About"
+    // dialog, so hiding the whole menu (matched by its visible label, not
+    // an internal class name, since those are minified) removes both
+    // cleanly without touching stock JS behavior. Live-verified the real
+    // top-level menu item markup is `<a class="geItem">Help</a>` - a plain
+    // `*` selector (not assuming `div`) avoids re-guessing the tag if a
+    // future vendored version changes it.
+    if (ui.menubar && ui.menubar.container) {
+      var hideHelpMenu = function () {
+        var items = ui.menubar.container.querySelectorAll("*");
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].children.length === 0 && items[i].textContent.trim() === "Help") {
+            items[i].style.display = "none";
+            return true;
+          }
+        }
+        return false;
+      };
+      if (!hideHelpMenu()) {
+        // Menu bar items can render a tick after construction in some
+        // builds - one retry on the next frame covers that without a
+        // polling loop.
+        requestAnimationFrame(hideHelpMenu);
+      }
+    }
+
     // DfdEditorFrame's "view" mode passes chrome=0. Traced the real gate,
     // live, in this vendored build: EditorUi's own init code wraps
     // `graph.isEnabled` in a closure that also requires an internal

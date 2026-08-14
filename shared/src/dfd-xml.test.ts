@@ -147,6 +147,58 @@ describe("compileToDrawioXml", () => {
     const xml = compileToDrawioXml(graph);
     expect(xml).not.toContain('dfdProvider="aws"');
   });
+
+  it("splits a boundary into separate boxes instead of enclosing a foreign node between its members", () => {
+    // customer (zoneA, depth 0) -> gateway (zoneB, depth 1) -> partner (zoneA, depth 2).
+    // zoneA's two members land in different columns with zoneB's node
+    // between them — a single bounding box around both zoneA members would
+    // swallow gateway. This is the exact shape found in 8 of the 9 real
+    // curated labs (e.g. app-security-checkout's Internet zone containing
+    // both "customer" and "payments" with "storefront" — Public DMZ — in
+    // between).
+    const g = dfdGraphSchema.parse({
+      version: "1.0",
+      nodes: [
+        { id: "customer", type: "external_entity", label: "Customer", trustBoundary: "zoneA" },
+        { id: "gateway", type: "process", label: "Gateway", trustBoundary: "zoneB" },
+        { id: "partner", type: "third_party", label: "Partner", trustBoundary: "zoneA" },
+      ],
+      edges: [
+        { id: "e1", source: "customer", target: "gateway" },
+        { id: "e2", source: "gateway", target: "partner" },
+      ],
+      trustBoundaries: [
+        { id: "zoneA", label: "Zone A", description: "" },
+        { id: "zoneB", label: "Zone B", description: "" },
+      ],
+    });
+    const xml = compileToDrawioXml(g);
+
+    // zoneA renders as two boxes (both carrying dfdBoundaryId="zoneA"), not one.
+    expect([...xml.matchAll(/dfdBoundaryId="zoneA"/g)]).toHaveLength(2);
+    expect([...xml.matchAll(/dfdBoundaryId="zoneB"/g)]).toHaveLength(1);
+
+    // Extract every boundary and node geometry and confirm no zoneA box
+    // encloses the zoneB (gateway) node.
+    const objectRe =
+      /<object ([^>]*)>\s*<mxCell[^>]*>\s*<mxGeometry x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)"/g;
+    const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}="([^"]*)"`))?.[1];
+    type Rect = { x: number; y: number; w: number; h: number };
+    const zoneABoxes: Rect[] = [];
+    let gatewayRect: Rect | undefined;
+    for (const m of xml.matchAll(objectRe)) {
+      const [, attrs, x, y, w, h] = m;
+      const rect = { x: Number(x), y: Number(y), w: Number(w), h: Number(h) };
+      if (attr(attrs!, "dfdBoundaryId") === "zoneA") zoneABoxes.push(rect);
+      if (attr(attrs!, "id") === "gateway") gatewayRect = rect;
+    }
+    const intersects = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    expect(zoneABoxes.some((box) => intersects(box, gatewayRect!))).toBe(false);
+
+    // Extraction dedupes the two zoneA boxes back into one logical boundary.
+    const extracted = extractFromDrawioXml(xml);
+    expect(extracted.trustBoundaries).toEqual(g.trustBoundaries);
+  });
 });
 
 describe("extractFromDrawioXml", () => {
@@ -372,6 +424,43 @@ describe("extractFromDrawioXml against every curated seed DFD", () => {
     const graph = dfdGraphSchema.parse(seed.dfd);
     const extracted = extractFromDrawioXml(compileToDrawioXml(graph));
     expect(extracted).toEqual(graph);
+  });
+
+  // A layered layout places nodes by dependency depth, not by trust
+  // boundary, so two boundaries routinely share a column — without
+  // clustering, a single bounding box around one boundary's scattered
+  // members silently swallows a node from a different boundary sitting
+  // between them. Parses the compiled XML's own geometry (not the internal
+  // layout functions, which aren't exported) so this exercises exactly what
+  // the editor actually renders.
+  it.each(files)("no trust-boundary box in %s encloses a node from a different boundary", (file) => {
+    const seed = JSON.parse(readFileSync(path.join(labsDir, file), "utf-8"));
+    const graph = dfdGraphSchema.parse(seed.dfd);
+    const xml = compileToDrawioXml(graph);
+
+    const objectRe = /<object ([^>]*)>\s*<mxCell[^>]*>\s*<mxGeometry x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)"/g;
+    const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}="([^"]*)"`))?.[1];
+
+    const boundaries: { boundaryId: string; x: number; y: number; w: number; h: number }[] = [];
+    const nodes: { trustBoundary?: string; x: number; y: number; w: number; h: number }[] = [];
+    for (const m of xml.matchAll(objectRe)) {
+      const [, attrs, x, y, w, h] = m;
+      const rect = { x: Number(x), y: Number(y), w: Number(w), h: Number(h) };
+      if (attr(attrs!, "dfdKind") === "boundary") {
+        boundaries.push({ boundaryId: attr(attrs!, "dfdBoundaryId")!, ...rect });
+      } else if (attr(attrs!, "dfdKind") === "node") {
+        nodes.push({ trustBoundary: attr(attrs!, "dfdTrustBoundary"), ...rect });
+      }
+    }
+
+    type Rect = { x: number; y: number; w: number; h: number };
+    const intersects = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    for (const boundary of boundaries) {
+      for (const node of nodes) {
+        if (node.trustBoundary === boundary.boundaryId) continue;
+        expect(intersects(boundary, node), `boundary ${boundary.boundaryId} box encloses a foreign node`).toBe(false);
+      }
+    }
   });
 });
 

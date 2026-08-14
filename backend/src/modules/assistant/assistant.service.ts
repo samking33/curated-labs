@@ -51,25 +51,53 @@ ${context}`;
   }
 
   /**
-   * A short, non-secret summary of where the learner is. Lab titles and step
-   * names are already visible in the catalogue and the UI, so including them
-   * costs nothing and makes the coach specific rather than generic.
+   * A short, non-secret summary of where the learner is. Lab/scenario titles
+   * and step names are already visible in the catalogue and the UI, so
+   * including them costs nothing and makes the coach specific rather than
+   * generic. Curated labs and Custom Playground are separate Prisma models
+   * (LabAttempt / PlaygroundAttempt) with no shared table — a learner who
+   * has only ever used Playground used to get "hasn't started a lab yet"
+   * regardless of how deep into a scenario they were, since this only
+   * queried labAttempt. Querying both and merging by recency treats the two
+   * modes equally, matching how the rest of the app treats them.
    */
   private async contextFor(userId: string): Promise<string> {
-    const attempts = await this.prisma.labAttempt.findMany({
-      where: { userId },
-      orderBy: { startedAt: "desc" },
-      take: 3,
-      include: { lab: { select: { title: true } } },
-    });
-    if (attempts.length === 0) {
-      return "CONTEXT: this learner has not started a lab yet. Encourage them to pick one.";
+    const [labAttempts, playgroundAttempts] = await Promise.all([
+      this.prisma.labAttempt.findMany({
+        where: { userId },
+        orderBy: { startedAt: "desc" },
+        take: 3,
+        include: { lab: { select: { title: true } } },
+      }),
+      this.prisma.playgroundAttempt.findMany({
+        where: { userId },
+        orderBy: { startedAt: "desc" },
+        take: 3,
+        include: { scenario: { select: { title: true } } },
+      }),
+    ]);
+
+    const entries = [
+      ...labAttempts.map((a) => ({
+        startedAt: a.startedAt,
+        status: a.status,
+        line: `- Curated Lab "${a.lab.title}": ${a.status}, currently at step "${a.currentStep}"`,
+      })),
+      ...playgroundAttempts.map((a) => ({
+        startedAt: a.startedAt,
+        status: a.status,
+        line: `- Custom Playground scenario "${a.scenario.title}": ${a.status}, currently at step "${a.currentStep}"`,
+      })),
+    ].sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+
+    if (entries.length === 0) {
+      return "CONTEXT: this learner has not started a lab or Playground scenario yet. Encourage them to pick one.";
     }
-    const done = attempts.filter((a) => a.status === "completed").length;
+    const done = entries.filter((e) => e.status === "completed").length;
     return [
       "CONTEXT (safe to mention):",
-      `- labs completed: ${done}`,
-      ...attempts.map((a) => `- ${a.lab.title}: ${a.status}, currently at step "${a.currentStep}"`),
+      `- completed: ${done}`,
+      ...entries.slice(0, 3).map((e) => e.line),
     ].join("\n");
   }
 

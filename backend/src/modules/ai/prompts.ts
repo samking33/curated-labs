@@ -138,7 +138,7 @@ export type PromptKey = keyof typeof PROMPTS;
  * (stricter) trust rules, so it lives in a separate registry that
  * `AiService` unions in only at its internal lookup site.
  */
-export const AUTHOR_PROMPT_VERSION = "2026-08-11.3";
+export const AUTHOR_PROMPT_VERSION = "2026-08-14.1";
 
 /**
  * A fixed, distinctive phrase seeded into the generator's system prompt.
@@ -225,6 +225,11 @@ more before responding, not after. Every threat also needs at least one threatMi
 naming a real mitigation key — a threat with zero mapped mitigations is rejected on its own.
 
 Per-field authoring rules:
+- "trustBoundary" on a node is REQUIRED, not optional despite the "?" in the shape above — every
+  node needs one, and dfd.trustBoundaries needs at least one entry to assign it to. A scenario
+  with any unassigned node is rejected outright. Group nodes into real zones the flow actually
+  crosses (e.g. "Internet"/public-facing, an internal network, a third-party zone) — not one
+  catch-all boundary containing everything, and not a separate boundary per node either.
 - "provider" on a node is OPTIONAL and applies only to process/service/data_store/queue nodes.
   Set it ONLY when the learner's own description explicitly names a specific cloud vendor
   (e.g. they wrote "AWS", "Azure", "GCP", "Google Cloud", or a named vendor service like "S3"

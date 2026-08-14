@@ -130,6 +130,69 @@ function fanOutEdges(graph: DfdGraph, layout: Layout): Map<string, { connectStyl
   return result;
 }
 
+type Rect = { x: number; y: number; w: number; h: number };
+
+/** Left/right/top/bottom padding a boundary box gets around its tightest
+ *  member bounding box — same numbers the single-box formula always used. */
+const BOUNDARY_PAD = { left: 40, right: 40, top: 50, bottom: 40 } as const;
+
+function boundingBox(rects: Rect[]): Rect {
+  const x0 = Math.min(...rects.map((r) => r.x));
+  const y0 = Math.min(...rects.map((r) => r.y));
+  const x1 = Math.max(...rects.map((r) => r.x + r.w));
+  const y1 = Math.max(...rects.map((r) => r.y + r.h));
+  return {
+    x: x0 - BOUNDARY_PAD.left,
+    y: y0 - BOUNDARY_PAD.top,
+    w: x1 - x0 + BOUNDARY_PAD.left + BOUNDARY_PAD.right,
+    h: y1 - y0 + BOUNDARY_PAD.top + BOUNDARY_PAD.bottom,
+  };
+}
+
+function rectsIntersect(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+/**
+ * A trust-boundary box is a plain rectangle (draw.io has no polygon "zone"
+ * shape), but a layered layout places nodes by dependency depth, not by
+ * boundary — two members of the same boundary routinely land in different
+ * columns with an unrelated node's column in between. A single bounding box
+ * around all of a boundary's members would then silently swallow that
+ * unrelated node too (an axis-aligned box around two diagonal points always
+ * covers the rectangle between them). Confirmed empirically: 8 of the 9
+ * curated labs have at least one column shared by two different boundaries.
+ *
+ * Fixes this by clustering a boundary's members greedily — start with one
+ * cluster per member, and merge two clusters only when the merged box does
+ * NOT intersect any node belonging to a different boundary. What can't merge
+ * safely renders as its own box instead, so the same boundary can legitimately
+ * appear as more than one rectangle (still correct DFD notation — "Internet"
+ * next to two unrelated external-facing nodes is two boxes, not one that eats
+ * the trusted node between them). This never produces a box that wrongly
+ * encloses a foreign node, by construction.
+ */
+function clusterBoundaryMembers(members: DfdNode[], layout: Layout, foreignRects: Rect[]): DfdNode[][] {
+  let clusters: DfdNode[][] = members.map((m) => [m]);
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let i = 0; i < clusters.length && !merged; i++) {
+      for (let j = i + 1; j < clusters.length; j++) {
+        const rects = [...clusters[i]!, ...clusters[j]!].map((n) => layout.nodes.get(n.id)!);
+        const box = boundingBox(rects);
+        if (!foreignRects.some((fr) => rectsIntersect(box, fr))) {
+          clusters[i] = [...clusters[i]!, ...clusters[j]!];
+          clusters.splice(j, 1);
+          merged = true;
+          break;
+        }
+      }
+    }
+  }
+  return clusters;
+}
+
 /** JSON → draw.io XML. Deterministic — no AI, no parsing library needed for
  *  this direction since we fully control the output shape. */
 export function compileToDrawioXml(graph: DfdGraph): string {
@@ -147,22 +210,41 @@ export function compileToDrawioXml(graph: DfdGraph): string {
   // (draw.io z-orders by document order).
   graph.trustBoundaries.forEach((boundary, i) => {
     const members = boundaryMembers.get(boundary.id) ?? [];
-    const rects = members.map((n) => layout.nodes.get(n.id)!).filter(Boolean);
-    const box = rects.length
-      ? {
-          x: Math.min(...rects.map((r) => r.x)) - 40,
-          y: Math.min(...rects.map((r) => r.y)) - 50,
-          w: Math.max(...rects.map((r) => r.x + r.w)) - Math.min(...rects.map((r) => r.x)) + 80,
-          h: Math.max(...rects.map((r) => r.y + r.h)) - Math.min(...rects.map((r) => r.y)) + 90,
-        }
-      : { x: 0, y: layout.bounds.maxY + 100 + i * 140, w: 200, h: 100 };
-    cells.push(
-      `<object id="${escapeXml(boundary.id)}" label="${escapeXml(boundary.label)}" dfdKind="boundary" ` +
-        `dfdDescription="${escapeXml(boundary.description)}">` +
-        `<mxCell style="${BOUNDARY_STYLE}" vertex="1" connectable="0" parent="1">` +
-        `<mxGeometry x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" as="geometry"/>` +
-        `</mxCell></object>`,
-    );
+    if (members.length === 0) {
+      // Empty boundary: fixed placeholder box stacked below the diagram,
+      // same fallback as before clustering existed.
+      const box = { x: 0, y: layout.bounds.maxY + 100 + i * 140, w: 200, h: 100 };
+      cells.push(
+        `<object id="${escapeXml(boundary.id)}" dfdBoundaryId="${escapeXml(boundary.id)}" ` +
+          `label="${escapeXml(boundary.label)}" dfdKind="boundary" dfdDescription="${escapeXml(boundary.description)}">` +
+          `<mxCell style="${BOUNDARY_STYLE}" vertex="1" connectable="0" parent="1">` +
+          `<mxGeometry x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" as="geometry"/>` +
+          `</mxCell></object>`,
+      );
+      return;
+    }
+
+    const foreignRects = graph.nodes
+      .filter((n) => n.trustBoundary !== boundary.id)
+      .map((n) => layout.nodes.get(n.id))
+      .filter((r): r is NonNullable<typeof r> => Boolean(r));
+    const clusters = clusterBoundaryMembers(members, layout, foreignRects);
+
+    clusters.forEach((cluster, clusterIndex) => {
+      const rects = cluster.map((n) => layout.nodes.get(n.id)!);
+      const box = boundingBox(rects);
+      // Each cluster needs its own mxGraph cell id (ids must be unique in
+      // the document), but they all represent the same logical boundary —
+      // dfdBoundaryId carries that canonical identity through extraction.
+      const cellId = clusterIndex === 0 ? boundary.id : `${boundary.id}__${clusterIndex + 1}`;
+      cells.push(
+        `<object id="${escapeXml(cellId)}" dfdBoundaryId="${escapeXml(boundary.id)}" ` +
+          `label="${escapeXml(boundary.label)}" dfdKind="boundary" dfdDescription="${escapeXml(boundary.description)}">` +
+          `<mxCell style="${BOUNDARY_STYLE}" vertex="1" connectable="0" parent="1">` +
+          `<mxGeometry x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" as="geometry"/>` +
+          `</mxCell></object>`,
+      );
+    });
   });
 
   for (const node of graph.nodes) {
@@ -274,6 +356,11 @@ export function extractFromDrawioXml(xml: string): DfdGraph {
   const nodes: Record<string, unknown>[] = [];
   const edges: Record<string, unknown>[] = [];
   const trustBoundaries: Record<string, unknown>[] = [];
+  // A boundary can render as more than one box (see compileToDrawioXml's
+  // clustering) — dfdBoundaryId carries the canonical id shared across
+  // those boxes, so this dedupes them back into one logical boundary,
+  // keeping the first box's label/description.
+  const seenBoundaryIds = new Set<string>();
 
   const handle = (attrs: RawAttrs, cell: RawAttrs) => {
     const id = String(attrs["@_id"] ?? cell["@_id"]);
@@ -282,7 +369,10 @@ export function extractFromDrawioXml(xml: string): DfdGraph {
     const kind = attrs["@_dfdKind"];
 
     if (kind === "boundary" || (!kind && cell["@_connectable"] === "0")) {
-      trustBoundaries.push({ id, label, description: String(attrs["@_dfdDescription"] ?? "") });
+      const canonicalId = String(attrs["@_dfdBoundaryId"] ?? id);
+      if (seenBoundaryIds.has(canonicalId)) return;
+      seenBoundaryIds.add(canonicalId);
+      trustBoundaries.push({ id: canonicalId, label, description: String(attrs["@_dfdDescription"] ?? "") });
       return;
     }
     if (kind === "edge" || cell["@_edge"] === "1") {
