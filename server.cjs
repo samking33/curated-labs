@@ -51,6 +51,16 @@ backendEnv.TOKIO_WORKER_THREADS = backendEnv.TOKIO_WORKER_THREADS || "2";
 backendEnv.UV_THREADPOOL_SIZE = backendEnv.UV_THREADPOOL_SIZE || "2";
 
 /*
+ * This file only ever runs on the hosted, public deployment, so it is the
+ * honest place to say so. The backend keys Secure cookies, HSTS and error
+ * redaction off this rather than NODE_ENV, because the dev-login workaround
+ * above forces NODE_ENV=development — which had silently turned all three
+ * off on a public HTTPS site (observed live: a 500 response carrying
+ * absolute server paths and query text).
+ */
+backendEnv.PUBLIC_DEPLOYMENT = "true";
+
+/*
  * Supervise the backend rather than dying with it.
  *
  * Prisma's native query engine panics on this host ("timer has gone away",

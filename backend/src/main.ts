@@ -22,7 +22,7 @@ async function bootstrap() {
   await app.register(helmet, {
     // The API serves JSON only; a CSP here would only affect error pages.
     contentSecurityPolicy: false,
-    hsts: config.isProduction ? { maxAge: 31_536_000, includeSubDomains: true } : false,
+    hsts: config.isHardened ? { maxAge: 31_536_000, includeSubDomains: true } : false,
   });
   await app.register(cookie, { secret: config.SESSION_SECRET });
 
@@ -44,7 +44,7 @@ async function bootstrap() {
   app.setGlobalPrefix(API_PREFIX);
   // Validation is per-route via ZodValidationPipe against the shared contracts,
   // so there is no class-validator global pipe here.
-  app.useGlobalFilters(new HttpExceptionFilter(config.isProduction));
+  app.useGlobalFilters(new HttpExceptionFilter(config.isHardened));
   app.enableShutdownHooks();
 
   await app.listen(config.PORT, "0.0.0.0");

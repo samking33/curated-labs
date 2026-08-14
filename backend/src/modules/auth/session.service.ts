@@ -122,7 +122,7 @@ export class SessionService {
   cookieOptions() {
     return {
       httpOnly: true,
-      secure: this.config.isProduction,
+      secure: this.config.isHardened,
       sameSite: "lax" as const,
       path: "/",
       maxAge: Math.floor(SESSION_ABSOLUTE_MS / 1000),

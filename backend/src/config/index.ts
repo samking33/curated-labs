@@ -80,10 +80,21 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().default(""),
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-5"),
   ANTHROPIC_BASE_URL: z.string().default("https://api.anthropic.com"),
+
+  /**
+   * Set by the hosted entry point (server.cjs), which only ever runs on a
+   * public deployment. Transport hardening has to key off this rather than
+   * NODE_ENV: the host forces NODE_ENV=development so ALLOW_DEV_LOGIN can
+   * stay on, and that silently disabled Secure cookies, HSTS and error
+   * redaction on a public HTTPS site.
+   */
+  PUBLIC_DEPLOYMENT: z.coerce.boolean().default(false),
 });
 
 export type AppConfig = z.infer<typeof schema> & {
   isProduction: boolean;
+  /** Served to the public over TLS — harden transport regardless of NODE_ENV. */
+  isHardened: boolean;
   googleConfigured: boolean;
   nimConfigured: boolean;
   anthropicConfigured: boolean;
@@ -108,6 +119,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     ...cfg,
     isProduction: cfg.NODE_ENV === "production",
+    isHardened: cfg.NODE_ENV === "production" || cfg.PUBLIC_DEPLOYMENT || cfg.WEB_APP_URL.startsWith("https://"),
     googleConfigured: Boolean(cfg.GOOGLE_CLIENT_ID && cfg.GOOGLE_CLIENT_SECRET),
     nimConfigured: Boolean(cfg.NVIDIA_NIM_API_KEY),
     anthropicConfigured: Boolean(cfg.ANTHROPIC_API_KEY),

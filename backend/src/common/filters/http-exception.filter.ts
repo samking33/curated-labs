@@ -63,5 +63,25 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     void reply.status(status).send({ error: { code, message, requestId, ...(details ? { details } : {}) } });
+
+    if (isUnrecoverableEnginePanic(exception)) this.recycle();
   }
+
+  /**
+   * Prisma's engine says so itself: a panic is "a non-recoverable error".
+   * The client stays broken for the life of the process, so every later
+   * query 500s too — observed live, a backend happily serving nothing but
+   * engine panics for as long as it was left running. Exit instead and let
+   * the supervisor in server.cjs restart it with a fresh engine, after the
+   * response above has been flushed.
+   */
+  private recycle() {
+    this.logger.error("prisma engine panicked and cannot recover — exiting so the supervisor restarts a fresh one");
+    setTimeout(() => process.exit(1), 100).unref();
+  }
+}
+
+function isUnrecoverableEnginePanic(exception: unknown): boolean {
+  const message = exception instanceof Error ? exception.message : "";
+  return message.includes("PANIC:") || message.includes("non-recoverable error");
 }
