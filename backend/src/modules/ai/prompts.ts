@@ -1,4 +1,4 @@
-import { SCENARIO_BOUNDS, type GenerateScenarioRequest } from "@curated-labs/shared";
+import { SCENARIO_BOUNDS, THREAT_CATEGORIES, type GenerateScenarioRequest } from "@curated-labs/shared";
 
 /**
  * Versioned prompt registry (§14, §19).
@@ -200,7 +200,8 @@ Return JSON matching exactly this shape:
   },
   "architectureIssues": [{ "key": string, "title": string, "description": string,
                            "affectedNodeIds": string[], "affectedEdgeIds": string[], "hint"?: string }],
-  "threats": [{ "key": string, "title": string, "description": string, "category": string,
+  "threats": [{ "key": string, "title": string, "description": string,
+               "category": ${THREAT_CATEGORIES.map((c) => `"${c}"`).join(" | ")},
                "expectedPriority": "critical" | "high" | "medium" | "low",
                "affectedNodeIds": string[], "affectedEdgeIds": string[],
                "acceptedAliases": string[], "learnerExplanation"?: string }],
@@ -228,7 +229,13 @@ Per-field authoring rules:
   Set it ONLY when the learner's own description explicitly names a specific cloud vendor
   (e.g. they wrote "AWS", "Azure", "GCP", "Google Cloud", or a named vendor service like "S3"
   or "Lambda"). Never set it from generic cues like "the cloud" or "serverless" — those
-  describe a pattern, not a vendor, and get no provider. When in doubt, leave it unset.`,
+  describe a pattern, not a vendor, and get no provider. When in doubt, leave it unset.
+- "category" on a threat: pick the SINGLE most specific category, not the first STRIDE one
+  that loosely applies. A leaked training dataset is "AI model abuse", not "Information
+  disclosure"; an open S3 bucket from a missing bucket policy is "Security misconfiguration",
+  not "Elevation of privilege"; an unlawful data retention period is "Privacy violation", not
+  "Information disclosure". Use the whole 12-category set — a scenario that only ever reaches
+  for the original 6 is under-using the taxonomy.`,
   },
 } as const;
 

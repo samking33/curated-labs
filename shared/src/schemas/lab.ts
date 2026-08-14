@@ -6,6 +6,33 @@ export const labStatusSchema = z.enum(["draft", "review", "published", "archived
 export const priorityLevelSchema = z.enum(["critical", "high", "medium", "low"]);
 export const releaseDecisionSchema = z.enum(["ship_it", "ship_with_conditions", "do_not_ship"]);
 
+/**
+ * The 12 threat categories every canonical and generated threat is
+ * classified under. The first 6 are STRIDE, unchanged from the original
+ * seed data. The remaining 6 extend it to cover the ground STRIDE doesn't:
+ * architectural flaws below the level of a single spoof/tamper/etc., cloud
+ * misconfiguration, third-party/dependency risk, privacy, AI/ML-specific
+ * abuse, and identity/access failures broader than pure privilege
+ * escalation — chosen to match this platform's own lab categories
+ * (App Security, Cloud Security, AI Security, Privacy).
+ */
+export const THREAT_CATEGORIES = [
+  "Spoofing",
+  "Tampering",
+  "Repudiation",
+  "Information disclosure",
+  "Denial of service",
+  "Elevation of privilege",
+  "Insecure design",
+  "Security misconfiguration",
+  "Supply chain risk",
+  "Privacy violation",
+  "AI model abuse",
+  "Identity and access management failure",
+] as const;
+export const threatCategorySchema = z.enum(THREAT_CATEGORIES);
+export type ThreatCategory = z.infer<typeof threatCategorySchema>;
+
 /** PROJECT.md §8. Order matters — `stepIndex` derives progression from it. */
 export const LAB_STEPS = [
   "intro",
@@ -61,7 +88,7 @@ export const labSeedSchema = z.object({
       key: z.string().min(1),
       title: z.string().min(1),
       description: z.string().min(1),
-      category: z.string().min(1),
+      category: threatCategorySchema,
       expectedPriority: priorityLevelSchema,
       affectedNodeIds: z.array(z.string()).default([]),
       affectedEdgeIds: z.array(z.string()).default([]),

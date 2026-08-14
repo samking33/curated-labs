@@ -44,7 +44,7 @@ function baseDraft(overrides: Partial<PlaygroundScenarioDraft> = {}): Playground
     ],
     threats: [
       { key: "t1", title: "Card skimming", description: "d", category: "Tampering", expectedPriority: "critical" as const, affectedNodeIds: ["n2"] },
-      { key: "t2", title: "DB exfiltration", description: "d", category: "Information Disclosure", expectedPriority: "high" as const, affectedNodeIds: ["n3"] },
+      { key: "t2", title: "DB exfiltration", description: "d", category: "Information disclosure", expectedPriority: "high" as const, affectedNodeIds: ["n3"] },
       { key: "t3", title: "Processor spoofing", description: "d", category: "Spoofing", expectedPriority: "medium" as const, affectedNodeIds: ["n4"] },
     ],
     mitigations: [
@@ -119,9 +119,9 @@ describe("validateGeneratedScenario", () => {
   it("rejects a duplicate threat key", () => {
     const draft = baseDraft({
       threats: [
-        { key: "t1", title: "a", description: "d", category: "c", expectedPriority: "high", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
-        { key: "t1", title: "b", description: "d", category: "c", expectedPriority: "low", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
-        { key: "t3", title: "c", description: "d", category: "c", expectedPriority: "medium", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
+        { key: "t1", title: "a", description: "d", category: "Spoofing", expectedPriority: "high", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
+        { key: "t1", title: "b", description: "d", category: "Spoofing", expectedPriority: "low", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
+        { key: "t3", title: "c", description: "d", category: "Spoofing", expectedPriority: "medium", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
       ],
       threatMitigations: [
         { threatKey: "t1", mitigationKey: "m1", isPrimary: true },
@@ -152,9 +152,9 @@ describe("validateGeneratedScenario", () => {
         { key: "ai2", title: "y", description: "d", affectedNodeIds: [], affectedEdgeIds: [] },
       ],
       threats: [
-        { key: "t1", title: "a", description: "d", category: "c", expectedPriority: "high", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
-        { key: "t2", title: "b", description: "d", category: "c", expectedPriority: "low", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
-        { key: "t3", title: "c", description: "d", category: "c", expectedPriority: "medium", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
+        { key: "t1", title: "a", description: "d", category: "Spoofing", expectedPriority: "high", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
+        { key: "t2", title: "b", description: "d", category: "Spoofing", expectedPriority: "low", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
+        { key: "t3", title: "c", description: "d", category: "Spoofing", expectedPriority: "medium", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
       ],
     } as unknown as Partial<PlaygroundScenarioDraft>);
     const errors = validateGeneratedScenario(draft, TEST_SENTINEL);
@@ -179,9 +179,9 @@ describe("validateGeneratedScenario", () => {
   it("rejects a scenario over the serialized-size limit", () => {
     const draft = baseDraft({
       threats: [
-        { key: "t1", title: "a", description: "x".repeat(200_000), category: "c", expectedPriority: "high", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
-        { key: "t2", title: "b", description: "d", category: "c", expectedPriority: "low", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
-        { key: "t3", title: "c", description: "d", category: "c", expectedPriority: "medium", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
+        { key: "t1", title: "a", description: "x".repeat(200_000), category: "Spoofing", expectedPriority: "high", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
+        { key: "t2", title: "b", description: "d", category: "Spoofing", expectedPriority: "low", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
+        { key: "t3", title: "c", description: "d", category: "Spoofing", expectedPriority: "medium", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [] },
       ],
     } as Partial<PlaygroundScenarioDraft>);
     const errors = validateGeneratedScenario(draft, TEST_SENTINEL);

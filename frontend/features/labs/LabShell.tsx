@@ -337,10 +337,9 @@ export function LabShell({
           padding: tokens.space(7),
         }}
       >
+        <div style={{ position: "sticky", top: 150, display: "grid", gap: tokens.space(2) }}>
         <section
           style={{
-            position: "sticky",
-            top: 150,
             // Tuned to the diagrams rather than the viewport: the flat layouts
             // are wide and short, so fitting is width-bound and extra height
             // just adds empty canvas above and below the graph.
@@ -379,6 +378,14 @@ export function LabShell({
             }
           />
         </section>
+
+        {/* Same wording for curated and generated DFDs (dfdSavePath only
+            distinguishes editability) — neither is a real system, both are
+            teaching aids a learner could otherwise mistake for ground truth. */}
+        <p style={{ margin: 0, fontSize: tokens.size.xs, color: tokens.color.textFaint, fontStyle: "italic" }}>
+          Reference architecture and DFD for learning purposes only. Multiple valid representations may exist.
+        </p>
+        </div>
 
         <div style={{ display: "grid", gap: tokens.space(4), alignContent: "start", minWidth: 0 }}>
           {error && <Alert tone="error">{error}</Alert>}

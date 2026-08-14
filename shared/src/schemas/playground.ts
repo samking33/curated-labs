@@ -4,6 +4,7 @@ import {
   labSeedSchema,
   priorityLevelSchema,
   releaseDecisionSchema,
+  threatCategorySchema,
   validateSeedReferences,
   type LabSeed,
 } from "./lab";
@@ -87,7 +88,7 @@ export const playgroundScenarioContentSchema = z.object({
       id: z.string().uuid(),
       title: z.string(),
       description: z.string(),
-      category: z.string(),
+      category: threatCategorySchema,
       expectedPriority: priorityLevelSchema,
       affectedNodeIds: z.array(z.string()).default([]),
       affectedEdgeIds: z.array(z.string()).default([]),

@@ -68,7 +68,7 @@ function makeScenarioContent(overrides: Record<string, unknown> = {}) {
         category: "Tampering", expectedPriority: "critical", affectedNodeIds: [], affectedEdgeIds: [],
         acceptedAliases: ["skimming"], learnerExplanation: "Because payment data in transit is unprotected.", sortOrder: 0,
       },
-      { id: t2, title: "DB exfiltration", description: "d", category: "Information Disclosure", expectedPriority: "high", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [], learnerExplanation: null, sortOrder: 1 },
+      { id: t2, title: "DB exfiltration", description: "d", category: "Information disclosure", expectedPriority: "high", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [], learnerExplanation: null, sortOrder: 1 },
       { id: t3, title: "Processor spoofing", description: "d", category: "Spoofing", expectedPriority: "medium", affectedNodeIds: [], affectedEdgeIds: [], acceptedAliases: [], learnerExplanation: null, sortOrder: 2 },
     ],
     mitigations: [

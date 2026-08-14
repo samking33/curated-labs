@@ -20,6 +20,7 @@ import {
   assertStepAllowed,
   comparePriorities,
   gradeMitigations,
+  releaseHeadline,
   replayResult,
 } from "../../common/workflow";
 
@@ -484,6 +485,18 @@ export class AttemptsService {
 
     const ai = await this.ai.releaseFeedback({ answer, guidance, priorSubmissions, labId: attempt.labId });
 
+    // The headline is fixed copy keyed on a deterministic alignment check,
+    // not something the model writes — a canned string is more reliable
+    // than hoping every model call reproduces it verbatim. It sits beside
+    // the model's own (deliberately non-judgmental) reasoning, not in place
+    // of it: guidance.recommendedDecision is one defensible answer, not the
+    // only one, so this never overrides ai.feedback's own framing.
+    const aligned = guidance ? guidance.recommendedDecision === answer.decision : null;
+    const feedback =
+      ai.feedback && aligned !== null
+        ? { ...ai.feedback, headline: releaseHeadline(aligned) }
+        : ai.feedback;
+
     await this.prisma.$transaction([
       this.prisma.learnerReleaseDecision.upsert({
         where: { attemptId },
@@ -492,18 +505,18 @@ export class AttemptsService {
           decision: answer.decision,
           rationale: answer.rationale,
           conditions: answer.conditions ?? null,
-          aiFeedbackJson: (ai.feedback ?? undefined) as object | undefined,
+          aiFeedbackJson: (feedback ?? undefined) as object | undefined,
         },
         update: {
           decision: answer.decision,
           rationale: answer.rationale,
           conditions: answer.conditions ?? null,
-          aiFeedbackJson: (ai.feedback ?? undefined) as object | undefined,
+          aiFeedbackJson: (feedback ?? undefined) as object | undefined,
         },
       }),
       this.prisma.labStepSubmission.update({
         where: { id: submission.id },
-        data: { aiFeedbackJson: (ai.feedback ?? undefined) as object | undefined },
+        data: { aiFeedbackJson: (feedback ?? undefined) as object | undefined },
       }),
       this.prisma.labAttempt.update({
         where: { id: attemptId },
@@ -522,7 +535,7 @@ export class AttemptsService {
       submissionId: submission.id,
       attemptNumber: submission.attemptNumber,
       currentStep: "completed",
-      aiFeedback: ai.feedback,
+      aiFeedback: feedback,
       aiStatus: ai.status,
       deterministicResult: null,
       revealedThreats: null,

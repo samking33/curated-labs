@@ -73,6 +73,11 @@ export function FeedbackPanel({
             <Badge>Coaching, not a grade</Badge>
           </div>
 
+          {typeof fb.headline === "string" && (
+            <p style={{ margin: `0 0 ${tokens.space(3)}`, fontSize: tokens.size.base, fontWeight: 600, lineHeight: 1.5 }}>
+              {fb.headline}
+            </p>
+          )}
           <Prose text={pick(fb, "summary", "feedback", "decisionReflection", "overallFeedback")} />
 
           <List title="What you covered well" items={arr(fb.strengths ?? fb.reasoningStrengths)} />

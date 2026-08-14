@@ -76,3 +76,12 @@ export function gradeMitigations(
     totalCount: graded.length,
   };
 }
+
+/** Fixed copy keyed on whether the learner's release decision matches the
+ *  lab's recommended one — deterministic so it's reliable regardless of
+ *  what the model says in the same response. */
+export function releaseHeadline(aligned: boolean): string {
+  return aligned
+    ? "Great decision! Your reasoning demonstrates sound risk-based thinking. You're well on your way to thinking like a security architect—or perhaps even a future CISO."
+    : "Good effort! Threat modeling is about making informed decisions, and there can be multiple valid perspectives. Consider how the identified risks and remaining gaps influence the release decision. Keep practicing—you'll get even better.";
+}
