@@ -128,10 +128,39 @@ describe("compileToDrawioXml", () => {
     expect(xml).toMatch(/id="e3"[\s\S]*?<mxPoint x="0" y="22" as="offset"\/>/);
   });
 
-  it("leaves a single edge between a column pair with no fan-out (matches prior output)", () => {
+  it("pins a lone forward edge to the mid-height of each side, with no label offset", () => {
+    // Pinned even when alone: left to choose its own perimeter points, the
+    // router elbows through whatever node sits between the two rows once
+    // zones are banded. Centered (0.50) rather than staggered because there
+    // is nothing to fan out against.
     const xml = compileToDrawioXml(graph);
-    expect(xml).not.toContain("exitX=1");
+    expect(xml).toContain("exitX=1;exitY=0.50;");
+    expect(xml).toContain("entryX=0;entryY=0.50;");
     expect(xml).not.toContain('as="offset"');
+  });
+
+  it("gives a provider-icon node a square cell so the vendor stencil isn't stretched", () => {
+    // The vendor styles are square stencils with the label rendered
+    // underneath. Stretching one across the full NODE_W made the logos
+    // roughly 2:1 — reported from the real k8s lab as "symbols look very
+    // stretched".
+    const g = dfdGraphSchema.parse({
+      version: "1.0",
+      nodes: [
+        { id: "icon", type: "data_store", label: "Managed DB", provider: "gcp", trustBoundary: "z" },
+        { id: "plain", type: "process", label: "Plain", trustBoundary: "z" },
+      ],
+      edges: [{ id: "e1", source: "plain", target: "icon" }],
+      trustBoundaries: [{ id: "z", label: "Zone", description: "" }],
+    });
+    const xml = compileToDrawioXml(g);
+    const geom = (id: string) =>
+      xml.match(new RegExp(`id="${id}"[\\s\\S]*?<mxGeometry x="[-\\d.]+" y="[-\\d.]+" width="([\\d.]+)" height="([\\d.]+)"`));
+
+    const icon = geom("icon")!;
+    expect(Number(icon[1])).toBe(Number(icon[2])); // square
+    const plain = geom("plain")!;
+    expect(Number(plain[1])).toBeGreaterThan(Number(plain[2])); // unchanged wide box
   });
 
   it("ignores provider on non-infrastructure types even if somehow set", () => {
@@ -148,14 +177,15 @@ describe("compileToDrawioXml", () => {
     expect(xml).not.toContain('dfdProvider="aws"');
   });
 
-  it("splits a boundary into separate boxes instead of enclosing a foreign node between its members", () => {
+  it("keeps a zone's box off a foreign node even when its members span columns", () => {
     // customer (zoneA, depth 0) -> gateway (zoneB, depth 1) -> partner (zoneA, depth 2).
     // zoneA's two members land in different columns with zoneB's node
-    // between them — a single bounding box around both zoneA members would
-    // swallow gateway. This is the exact shape found in 8 of the 9 real
-    // curated labs (e.g. app-security-checkout's Internet zone containing
-    // both "customer" and "payments" with "storefront" — Public DMZ — in
-    // between).
+    // between them. Under a purely dependency-ordered layout a single box
+    // around both zoneA members swallowed gateway — this is the exact shape
+    // found in 8 of the 9 real curated labs (e.g. app-security-checkout's
+    // Internet zone holding both "customer" and "payments" with the Public
+    // DMZ's "storefront" between them). Banding by zone separates them
+    // vertically instead, so one box per zone stays correct.
     const g = dfdGraphSchema.parse({
       version: "1.0",
       nodes: [
@@ -174,9 +204,9 @@ describe("compileToDrawioXml", () => {
     });
     const xml = compileToDrawioXml(g);
 
-    // zoneA renders as two boxes (both carrying dfdBoundaryId="zoneA"), not one.
-    expect([...xml.matchAll(/dfdBoundaryId="zoneA"/g)]).toHaveLength(2);
-    expect([...xml.matchAll(/dfdBoundaryId="zoneB"/g)]).toHaveLength(1);
+    // Each zone is exactly one rectangle — the banded layout means a zone
+    // never has to fragment to stay off a foreign node.
+    expect([...xml.matchAll(/dfdKind="boundary"/g)]).toHaveLength(2);
 
     // Extract every boundary and node geometry and confirm no zoneA box
     // encloses the zoneB (gateway) node.
@@ -189,13 +219,13 @@ describe("compileToDrawioXml", () => {
     for (const m of xml.matchAll(objectRe)) {
       const [, attrs, x, y, w, h] = m;
       const rect = { x: Number(x), y: Number(y), w: Number(w), h: Number(h) };
-      if (attr(attrs!, "dfdBoundaryId") === "zoneA") zoneABoxes.push(rect);
+      if (attr(attrs!, "id") === "zoneA") zoneABoxes.push(rect);
       if (attr(attrs!, "id") === "gateway") gatewayRect = rect;
     }
     const intersects = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    expect(zoneABoxes).toHaveLength(1);
     expect(zoneABoxes.some((box) => intersects(box, gatewayRect!))).toBe(false);
 
-    // Extraction dedupes the two zoneA boxes back into one logical boundary.
     const extracted = extractFromDrawioXml(xml);
     expect(extracted.trustBoundaries).toEqual(g.trustBoundaries);
   });
@@ -447,7 +477,7 @@ describe("extractFromDrawioXml against every curated seed DFD", () => {
       const [, attrs, x, y, w, h] = m;
       const rect = { x: Number(x), y: Number(y), w: Number(w), h: Number(h) };
       if (attr(attrs!, "dfdKind") === "boundary") {
-        boundaries.push({ boundaryId: attr(attrs!, "dfdBoundaryId")!, ...rect });
+        boundaries.push({ boundaryId: attr(attrs!, "id")!, ...rect });
       } else if (attr(attrs!, "dfdKind") === "node") {
         nodes.push({ trustBoundary: attr(attrs!, "dfdTrustBoundary"), ...rect });
       }
@@ -461,6 +491,21 @@ describe("extractFromDrawioXml against every curated seed DFD", () => {
         expect(intersects(boundary, node), `boundary ${boundary.boundaryId} box encloses a foreign node`).toBe(false);
       }
     }
+
+    // Two zone rectangles overlapping each other is the "trust boundaries are
+    // merging" report — they read as one region however correct the
+    // membership is underneath.
+    for (let i = 0; i < boundaries.length; i++) {
+      for (let j = i + 1; j < boundaries.length; j++) {
+        const a = boundaries[i]!;
+        const b = boundaries[j]!;
+        expect(intersects(a, b), `zone boxes ${a.boundaryId} and ${b.boundaryId} overlap`).toBe(false);
+      }
+    }
+
+    // One rectangle per zone: a zone drawn as several disconnected boxes is
+    // exactly as confusing as two zones drawn as one.
+    expect(boundaries).toHaveLength(graph.trustBoundaries.length);
   });
 });
 

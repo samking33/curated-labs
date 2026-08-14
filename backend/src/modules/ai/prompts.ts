@@ -138,7 +138,7 @@ export type PromptKey = keyof typeof PROMPTS;
  * (stricter) trust rules, so it lives in a separate registry that
  * `AiService` unions in only at its internal lookup site.
  */
-export const AUTHOR_PROMPT_VERSION = "2026-08-14.1";
+export const AUTHOR_PROMPT_VERSION = "2026-08-14.2";
 
 /**
  * A fixed, distinctive phrase seeded into the generator's system prompt.
@@ -230,6 +230,10 @@ Per-field authoring rules:
   with any unassigned node is rejected outright. Group nodes into real zones the flow actually
   crosses (e.g. "Internet"/public-facing, an internal network, a third-party zone) — not one
   catch-all boundary containing everything, and not a separate boundary per node either.
+- Order the "dfd.trustBoundaries" array from least-trusted to most-trusted (public internet
+  first, then any DMZ/edge, then internal networks, then the most sensitive data zone). The
+  renderer draws each zone as its own horizontal band in this order, so listing them out of
+  order draws an untrusted zone in the middle of the internal ones.
 - "provider" on a node is OPTIONAL and applies only to process/service/data_store/queue nodes.
   Set it ONLY when the learner's own description explicitly names a specific cloud vendor
   (e.g. they wrote "AWS", "Azure", "GCP", "Google Cloud", or a named vendor service like "S3"

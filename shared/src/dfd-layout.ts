@@ -1,12 +1,35 @@
-import type { DfdGraph } from "./schemas/dfd";
+import type { DfdGraph, DfdNode } from "./schemas/dfd";
 
 export const NODE_W = 190;
 export const NODE_H = 90;
+/**
+ * Provider-styled nodes render a square vendor stencil (AWS/Azure/GCP) with
+ * the label underneath, not inside. Stretching one across NODE_W makes the
+ * logo roughly 2:1 and unreadable — the "symbols look very stretched"
+ * report. These keep a square cell, centred in the same column slot.
+ */
+export const ICON_W = NODE_H;
 // Wide enough that orthogonalEdgeStyle has room to route several edges
 // between the same two columns without their labels stacking on top of each
 // other — see compileToDrawioXml's band-grouping for the label/entry-point
 // fan-out that uses this space.
 export const LAYOUT_GAPS = { colGap: 260, rowGap: 110 } as const;
+/**
+ * Vertical space between trust-zone bands. Must stay larger than a boundary
+ * box's own top + bottom padding (see BOUNDARY_PAD in dfd-xml.ts) or two
+ * adjacent zone rectangles touch and read as one merged region.
+ */
+export const BAND_GAP = 130;
+
+const PROVIDER_ICON_TYPES = new Set<DfdNode["type"]>(["process", "service", "data_store", "queue"]);
+
+/** The 4 infrastructure types are the only ones that ever get a vendor icon —
+ *  external_entity/third_party/trust_boundary aren't "vendor-flavored". Lives
+ *  here because the cell's SIZE depends on it, and the renderer reuses it so
+ *  the size rule and the style rule can never disagree. */
+export function usesProviderIcon(node: DfdNode): boolean {
+  return Boolean(node.provider) && PROVIDER_ICON_TYPES.has(node.type);
+}
 
 export type Placed = { id: string; x: number; y: number; w: number; h: number };
 export type Layout = {
@@ -15,10 +38,22 @@ export type Layout = {
 };
 
 /**
- * Layered left-to-right layout: column = longest path from a source node.
+ * Layered left-to-right layout, banded by trust zone.
+ *
+ * Column = longest path from a source node, so the diagram still reads as a
+ * flow. Row band = the node's trust boundary, in the order the author listed
+ * them (conventionally least-trusted first), so each zone owns a horizontal
+ * band across the whole diagram.
+ *
+ * The banding is what makes the zone rectangles legible. Ordering rows by
+ * dependency alone let two zones interleave vertically inside one column —
+ * measured on the real seed data, that fragmented one zone into four separate
+ * rectangles and stacked them private/internet/private down a single column,
+ * i.e. the untrusted zone drawn *inside* the internal one. Giving each zone
+ * its own band makes every boundary exactly one clean rectangle and keeps
+ * external zones visually outside the internal ones.
+ *
  * ponytail: no dagre. Threat-model DFDs are shallow and flow one direction.
- * Ported from the (now-deleted) custom renderer's layout.ts, dropping the
- * isometric-only gap variant — draw.io isn't isometric.
  */
 export function layoutGraph(graph: DfdGraph, gaps: { colGap: number; rowGap: number } = LAYOUT_GAPS): Layout {
   const { colGap: COL_GAP, rowGap: ROW_GAP } = gaps;
@@ -72,29 +107,51 @@ export function layoutGraph(graph: DfdGraph, gaps: { colGap: number; rowGap: num
   };
   for (const node of graph.nodes) depthOf(node.id);
 
-  const columns = new Map<number, string[]>();
+  // Band = trust zone, in authored order. Nodes with no zone share a trailing
+  // band so they still lay out rather than colliding with a real zone.
+  const bandOrder = graph.trustBoundaries.map((b) => b.id);
+  const bandOf = (node: DfdNode): number => {
+    const i = node.trustBoundary ? bandOrder.indexOf(node.trustBoundary) : -1;
+    return i >= 0 ? i : bandOrder.length;
+  };
+
+  // band -> column -> nodes in that cell
+  const cells = new Map<number, Map<number, DfdNode[]>>();
   for (const node of graph.nodes) {
-    const d = depth.get(node.id)!;
-    if (!columns.has(d)) columns.set(d, []);
-    columns.get(d)!.push(node.id);
+    const band = bandOf(node);
+    const col = depth.get(node.id)!;
+    if (!cells.has(band)) cells.set(band, new Map());
+    const byCol = cells.get(band)!;
+    if (!byCol.has(col)) byCol.set(col, []);
+    byCol.get(col)!.push(node);
   }
 
-  const tallest = Math.max(1, ...[...columns.values()].map((c) => c.length));
-  const colHeight = tallest * NODE_H + (tallest - 1) * ROW_GAP;
-
   const nodes = new Map<string, Placed>();
-  for (const [col, ids] of [...columns.entries()].sort((a, b) => a[0] - b[0])) {
-    const stackHeight = ids.length * NODE_H + (ids.length - 1) * ROW_GAP;
-    const top = (colHeight - stackHeight) / 2;
-    ids.forEach((id, row) => {
-      nodes.set(id, {
-        id,
-        x: col * (NODE_W + COL_GAP),
-        y: top + row * (NODE_H + ROW_GAP),
-        w: NODE_W,
-        h: NODE_H,
+  let bandTop = 0;
+  // Only bands that actually hold nodes consume vertical space, so an unused
+  // boundary never opens a gap in the middle of the diagram.
+  for (const band of [...cells.keys()].sort((a, b) => a - b)) {
+    const byCol = cells.get(band)!;
+    const tallest = Math.max(...[...byCol.values()].map((c) => c.length));
+    const bandHeight = tallest * NODE_H + (tallest - 1) * ROW_GAP;
+
+    for (const [col, ids] of byCol) {
+      const stackHeight = ids.length * NODE_H + (ids.length - 1) * ROW_GAP;
+      const top = bandTop + (bandHeight - stackHeight) / 2;
+      ids.forEach((node, row) => {
+        const w = usesProviderIcon(node) ? ICON_W : NODE_W;
+        nodes.set(node.id, {
+          id: node.id,
+          // Centre a narrow icon cell inside the full-width column slot so
+          // columns stay aligned regardless of which nodes carry an icon.
+          x: col * (NODE_W + COL_GAP) + (NODE_W - w) / 2,
+          y: top + row * (NODE_H + ROW_GAP),
+          w,
+          h: NODE_H,
+        });
       });
-    });
+    }
+    bandTop += bandHeight + BAND_GAP;
   }
 
   const placed = [...nodes.values()];

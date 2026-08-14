@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import { LAYOUT_GAPS, NODE_H, NODE_W, layoutGraph } from "./dfd-layout";
+import { LAYOUT_GAPS, layoutGraph, usesProviderIcon } from "./dfd-layout";
 import type { Layout } from "./dfd-layout";
 import { dfdGraphSchema } from "./schemas/dfd";
 import type { DfdGraph, DfdNode, DfdNodeProvider, DfdNodeType } from "./schemas/dfd";
@@ -65,12 +65,9 @@ const PROVIDER_STYLE: Partial<Record<DfdNodeProvider, Partial<Record<DfdNodeType
   },
 };
 
-/** Only these 4 types are ever provider-styled. */
-const PROVIDER_ELIGIBLE_TYPES = new Set<DfdNodeType>(["process", "service", "data_store", "queue"]);
-
 function styleFor(node: DfdNode): string {
-  if (node.provider && PROVIDER_ELIGIBLE_TYPES.has(node.type)) {
-    const override = PROVIDER_STYLE[node.provider]?.[node.type];
+  if (usesProviderIcon(node)) {
+    const override = PROVIDER_STYLE[node.provider!]?.[node.type];
     if (override) return override;
   }
   return SHAPE_STYLE[node.type];
@@ -100,6 +97,15 @@ function escapeXml(value: string): string {
  * every edge in a shared band also gets a vertical label offset so the text
  * stays readable even where paths still cross (same-column and backward
  * edges, which don't get a safe fixed exit/entry side).
+ *
+ * Every forward edge pins its exit to the source's right side and its entry
+ * to the target's left side, even when it is the only edge in its group.
+ * Left free, mxGraph picks whichever perimeter points it likes, and once
+ * zones are banded a single edge frequently changes row as well as column —
+ * the resulting elbow then lands *inside* an unrelated node sitting between
+ * the two (seen live: the k8s lab routed "HTTPS request" straight through
+ * the Container Registry box and dropped its label on top of that node's
+ * own). Pinning the sides forces the turn into the column gap instead.
  */
 function fanOutEdges(graph: DfdGraph, layout: Layout): Map<string, { connectStyle: string; labelOffsetY: number }> {
   const groups = new Map<string, DfdGraph["edges"]>();
@@ -121,9 +127,12 @@ function fanOutEdges(graph: DfdGraph, layout: Layout): Map<string, { connectStyl
       const t = layout.nodes.get(edge.target)!;
       const forward = s.x < t.x;
       const labelOffsetY = n > 1 ? Math.round((i - (n - 1) / 2) * LABEL_SPACING) : 0;
+      // A lone forward edge leaves/enters at the mid-height of its side; a
+      // shared lane staggers so the paths separate.
       const frac = ((i + 1) / (n + 1)).toFixed(2);
-      const connectStyle =
-        forward && n > 1 ? `exitX=1;exitY=${frac};exitDx=0;exitDy=0;entryX=0;entryY=${frac};entryDx=0;entryDy=0;` : "";
+      const connectStyle = forward
+        ? `exitX=1;exitY=${frac};exitDx=0;exitDy=0;entryX=0;entryY=${frac};entryDx=0;entryDy=0;`
+        : "";
       result.set(edge.id, { connectStyle, labelOffsetY });
     });
   }
@@ -133,8 +142,10 @@ function fanOutEdges(graph: DfdGraph, layout: Layout): Map<string, { connectStyl
 type Rect = { x: number; y: number; w: number; h: number };
 
 /** Left/right/top/bottom padding a boundary box gets around its tightest
- *  member bounding box — same numbers the single-box formula always used. */
-const BOUNDARY_PAD = { left: 40, right: 40, top: 50, bottom: 40 } as const;
+ *  member bounding box. `top` leaves room for the zone's own label; `bottom`
+ *  clears the label a provider-icon node renders *underneath* its cell.
+ *  Their sum must stay under BAND_GAP or adjacent zone boxes touch. */
+const BOUNDARY_PAD = { left: 40, right: 40, top: 50, bottom: 55 } as const;
 
 function boundingBox(rects: Rect[]): Rect {
   const x0 = Math.min(...rects.map((r) => r.x));
@@ -149,49 +160,16 @@ function boundingBox(rects: Rect[]): Rect {
   };
 }
 
-function rectsIntersect(a: Rect, b: Rect): boolean {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
-
 /**
- * A trust-boundary box is a plain rectangle (draw.io has no polygon "zone"
- * shape), but a layered layout places nodes by dependency depth, not by
- * boundary — two members of the same boundary routinely land in different
- * columns with an unrelated node's column in between. A single bounding box
- * around all of a boundary's members would then silently swallow that
- * unrelated node too (an axis-aligned box around two diagonal points always
- * covers the rectangle between them). Confirmed empirically: 8 of the 9
- * curated labs have at least one column shared by two different boundaries.
- *
- * Fixes this by clustering a boundary's members greedily — start with one
- * cluster per member, and merge two clusters only when the merged box does
- * NOT intersect any node belonging to a different boundary. What can't merge
- * safely renders as its own box instead, so the same boundary can legitimately
- * appear as more than one rectangle (still correct DFD notation — "Internet"
- * next to two unrelated external-facing nodes is two boxes, not one that eats
- * the trusted node between them). This never produces a box that wrongly
- * encloses a foreign node, by construction.
+ * A trust-boundary box is one plain rectangle around its members (draw.io has
+ * no polygon "zone" shape). That is only safe because layoutGraph gives every
+ * zone its own horizontal band — an axis-aligned box around two diagonal
+ * points also covers everything between them, so with zones interleaved down
+ * a column this box would silently swallow a node belonging to a different
+ * zone. The banding removes that case structurally rather than patching the
+ * box, and dfd-xml.test.ts asserts the no-foreign-node invariant against
+ * every curated lab so a future layout change can't quietly reintroduce it.
  */
-function clusterBoundaryMembers(members: DfdNode[], layout: Layout, foreignRects: Rect[]): DfdNode[][] {
-  let clusters: DfdNode[][] = members.map((m) => [m]);
-  let merged = true;
-  while (merged) {
-    merged = false;
-    for (let i = 0; i < clusters.length && !merged; i++) {
-      for (let j = i + 1; j < clusters.length; j++) {
-        const rects = [...clusters[i]!, ...clusters[j]!].map((n) => layout.nodes.get(n.id)!);
-        const box = boundingBox(rects);
-        if (!foreignRects.some((fr) => rectsIntersect(box, fr))) {
-          clusters[i] = [...clusters[i]!, ...clusters[j]!];
-          clusters.splice(j, 1);
-          merged = true;
-          break;
-        }
-      }
-    }
-  }
-  return clusters;
-}
 
 /** JSON → draw.io XML. Deterministic — no AI, no parsing library needed for
  *  this direction since we fully control the output shape. */
@@ -210,53 +188,33 @@ export function compileToDrawioXml(graph: DfdGraph): string {
   // (draw.io z-orders by document order).
   graph.trustBoundaries.forEach((boundary, i) => {
     const members = boundaryMembers.get(boundary.id) ?? [];
-    if (members.length === 0) {
-      // Empty boundary: fixed placeholder box stacked below the diagram,
-      // same fallback as before clustering existed.
-      const box = { x: 0, y: layout.bounds.maxY + 100 + i * 140, w: 200, h: 100 };
-      cells.push(
-        `<object id="${escapeXml(boundary.id)}" dfdBoundaryId="${escapeXml(boundary.id)}" ` +
-          `label="${escapeXml(boundary.label)}" dfdKind="boundary" dfdDescription="${escapeXml(boundary.description)}">` +
-          `<mxCell style="${BOUNDARY_STYLE}" vertex="1" connectable="0" parent="1">` +
-          `<mxGeometry x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" as="geometry"/>` +
-          `</mxCell></object>`,
-      );
-      return;
-    }
-
-    const foreignRects = graph.nodes
-      .filter((n) => n.trustBoundary !== boundary.id)
-      .map((n) => layout.nodes.get(n.id))
-      .filter((r): r is NonNullable<typeof r> => Boolean(r));
-    const clusters = clusterBoundaryMembers(members, layout, foreignRects);
-
-    clusters.forEach((cluster, clusterIndex) => {
-      const rects = cluster.map((n) => layout.nodes.get(n.id)!);
-      const box = boundingBox(rects);
-      // Each cluster needs its own mxGraph cell id (ids must be unique in
-      // the document), but they all represent the same logical boundary —
-      // dfdBoundaryId carries that canonical identity through extraction.
-      const cellId = clusterIndex === 0 ? boundary.id : `${boundary.id}__${clusterIndex + 1}`;
-      cells.push(
-        `<object id="${escapeXml(cellId)}" dfdBoundaryId="${escapeXml(boundary.id)}" ` +
-          `label="${escapeXml(boundary.label)}" dfdKind="boundary" dfdDescription="${escapeXml(boundary.description)}">` +
-          `<mxCell style="${BOUNDARY_STYLE}" vertex="1" connectable="0" parent="1">` +
-          `<mxGeometry x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" as="geometry"/>` +
-          `</mxCell></object>`,
-      );
-    });
+    const rects = members.flatMap((n) => layout.nodes.get(n.id) ?? []);
+    // An empty zone has nothing to wrap, so it gets a fixed placeholder box
+    // below the diagram rather than a zero-size rectangle at the origin.
+    const box = rects.length
+      ? boundingBox(rects)
+      : { x: 0, y: layout.bounds.maxY + 100 + i * 140, w: 200, h: 100 };
+    cells.push(
+      `<object id="${escapeXml(boundary.id)}" label="${escapeXml(boundary.label)}" dfdKind="boundary" ` +
+        `dfdDescription="${escapeXml(boundary.description)}">` +
+        `<mxCell style="${BOUNDARY_STYLE}" vertex="1" connectable="0" parent="1">` +
+        `<mxGeometry x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" as="geometry"/>` +
+        `</mxCell></object>`,
+    );
   });
 
   for (const node of graph.nodes) {
     const pos = layout.nodes.get(node.id)!;
-    const providerApplied = node.provider && PROVIDER_ELIGIBLE_TYPES.has(node.type) && PROVIDER_STYLE[node.provider]?.[node.type];
+    const providerApplied = usesProviderIcon(node) && PROVIDER_STYLE[node.provider!]?.[node.type];
     cells.push(
       `<object id="${escapeXml(node.id)}" label="${escapeXml(node.label)}" dfdKind="node" dfdType="${node.type}" ` +
         (providerApplied ? `dfdProvider="${node.provider}" ` : "") +
         `dfdDescription="${escapeXml(node.description)}" dfdAssets="${escapeXml(node.assets.map(encodeURIComponent).join(","))}"` +
         (node.trustBoundary ? ` dfdTrustBoundary="${escapeXml(node.trustBoundary)}"` : "") +
         `><mxCell style="${styleFor(node)}" vertex="1" parent="1">` +
-        `<mxGeometry x="${pos.x}" y="${pos.y}" width="${NODE_W}" height="${NODE_H}" as="geometry"/>` +
+        // Size comes from the layout, not a constant: provider-icon nodes get
+        // a square cell so the vendor stencil isn't stretched.
+        `<mxGeometry x="${pos.x}" y="${pos.y}" width="${pos.w}" height="${pos.h}" as="geometry"/>` +
         `</mxCell></object>`,
     );
   }
@@ -356,11 +314,6 @@ export function extractFromDrawioXml(xml: string): DfdGraph {
   const nodes: Record<string, unknown>[] = [];
   const edges: Record<string, unknown>[] = [];
   const trustBoundaries: Record<string, unknown>[] = [];
-  // A boundary can render as more than one box (see compileToDrawioXml's
-  // clustering) — dfdBoundaryId carries the canonical id shared across
-  // those boxes, so this dedupes them back into one logical boundary,
-  // keeping the first box's label/description.
-  const seenBoundaryIds = new Set<string>();
 
   const handle = (attrs: RawAttrs, cell: RawAttrs) => {
     const id = String(attrs["@_id"] ?? cell["@_id"]);
@@ -369,10 +322,7 @@ export function extractFromDrawioXml(xml: string): DfdGraph {
     const kind = attrs["@_dfdKind"];
 
     if (kind === "boundary" || (!kind && cell["@_connectable"] === "0")) {
-      const canonicalId = String(attrs["@_dfdBoundaryId"] ?? id);
-      if (seenBoundaryIds.has(canonicalId)) return;
-      seenBoundaryIds.add(canonicalId);
-      trustBoundaries.push({ id: canonicalId, label, description: String(attrs["@_dfdDescription"] ?? "") });
+      trustBoundaries.push({ id, label, description: String(attrs["@_dfdDescription"] ?? "") });
       return;
     }
     if (kind === "edge" || cell["@_edge"] === "1") {
