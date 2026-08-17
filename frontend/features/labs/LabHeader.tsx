@@ -210,6 +210,7 @@ function StepRail({ steps, currentIndex }: { steps: StepDef[]; currentIndex: num
 export function Roadmap({ steps, currentIndex }: { steps: StepDef[]; currentIndex: number }) {
   const blurb: Record<string, string> = {
     architecture_issues: "Say what looks risky, weak or missing.",
+    attack_surfaces: "Mark where untrusted input gets in.",
     threats: "Name the threats. Retry until you have the shape of it.",
     prioritization: "Rank them and defend your reasoning.",
     mitigations: "Match each threat to the control that addresses it.",

@@ -29,6 +29,7 @@ export function replayResult(
     aiFeedback: submission.aiFeedbackJson ?? null,
     aiStatus: submission.aiFeedbackJson ? "ok" : "unavailable",
     deterministicResult: submission.deterministicResultJson ?? null,
+    revealedAttackSurfaces: null,
     revealedThreats: null,
     // A replay is a retried request for an answer already scored — the points
     // and cheer already reached the client on the original response.

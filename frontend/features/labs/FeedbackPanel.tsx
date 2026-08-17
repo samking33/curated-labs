@@ -109,6 +109,41 @@ export function FeedbackPanel({
           </Card>
         )}
 
+      {result.revealedAttackSurfaces && result.revealedAttackSurfaces.length > 0 && (
+        <Card style={{ borderColor: tokens.color.accent }}>
+          <strong style={{ fontSize: tokens.size.lg }}>Every way into this system</strong>
+          <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm, margin: `${tokens.space(2)} 0` }}>
+            Ticked ones you found. An attack surface is a way in, not a weakness — naming what could
+            go wrong there is the next step.
+          </p>
+          <ul style={{ display: "grid", gap: tokens.space(2), listStyle: "none", padding: 0, margin: 0 }}>
+            {result.revealedAttackSurfaces.map((s) => {
+              const found = identifiedIds(result).includes(s.id);
+              return (
+                <li
+                  key={s.id}
+                  style={{
+                    borderLeft: `2px solid ${found ? tokens.color.accent : tokens.color.border}`,
+                    paddingLeft: tokens.space(3),
+                  }}
+                >
+                  <div style={{ display: "flex", gap: tokens.space(2), alignItems: "center" }}>
+                    <span aria-hidden style={{ color: found ? tokens.color.accent : tokens.color.textFaint }}>
+                      {found ? "\u2713" : "\u25cb"}
+                    </span>
+                    <strong>{s.label}</strong>
+                    <Badge>{s.kind === "edge" ? "Data flow" : "Entity"}</Badge>
+                  </div>
+                  <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm, margin: `${tokens.space(1)} 0 0` }}>
+                    {s.reason}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
       {result.revealedThreats && result.revealedThreats.length > 0 && (
         <Card style={{ borderColor: tokens.color.warning }}>
           <strong style={{ fontSize: tokens.size.lg }}>The full threat set for this lab</strong>
@@ -137,6 +172,13 @@ export function FeedbackPanel({
       )}
     </div>
   );
+}
+
+/** Which surfaces the learner got, from the deterministic result the server
+ *  computed — never inferred from the model's prose. */
+function identifiedIds(result: StepResult): string[] {
+  const d = result.deterministicResult as { identifiedIds?: unknown } | null;
+  return Array.isArray(d?.identifiedIds) ? (d.identifiedIds as string[]) : [];
 }
 
 function Prose({ text }: { text: string | null }) {

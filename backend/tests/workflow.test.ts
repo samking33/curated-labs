@@ -20,7 +20,8 @@ describe("assertStepAllowed", () => {
   });
 
   it("allows advancing exactly one step", () => {
-    expect(() => assertStepAllowed("architecture_issues", "threats")).not.toThrow();
+    expect(() => assertStepAllowed("architecture_issues", "attack_surfaces")).not.toThrow();
+    expect(() => assertStepAllowed("attack_surfaces", "threats")).not.toThrow();
   });
 
   it("rejects skipping ahead", () => {

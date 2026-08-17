@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { THREAT_RETRY_LIMIT, type DfdSelection, type LabDetail, type LabStep, type StepResult } from "@curated-labs/shared";
+import { THREAT_RETRY_LIMIT, stepIndex, type DfdSelection, type LabDetail, type LabStep, type StepResult } from "@curated-labs/shared";
 import { DfdEditorFrame } from "@/features/dfd-editor/DfdEditorFrame";
 import { api, ApiRequestError, newIdempotencyKey } from "@/lib/api";
 import { tokens } from "@/lib/tokens";
@@ -14,6 +14,7 @@ import { FeedbackPanel } from "./FeedbackPanel";
 import { LabReview } from "./LabReview";
 import {
   ArchitectureIssuesStep,
+  AttackSurfacesStep,
   MitigationMatchingStep,
   PrioritizationStep,
   ReleaseDecisionStep,
@@ -24,6 +25,7 @@ import {
 const STEP_LABELS: { step: LabStep; label: string }[] = [
   { step: "intro", label: "Brief" },
   { step: "architecture_issues", label: "Architectural analysis" },
+  { step: "attack_surfaces", label: "Attack surfaces" },
   { step: "threats", label: "Threat identification" },
   { step: "prioritization", label: "Assessing priority" },
   { step: "mitigations", label: "Mitigation mapping" },
@@ -32,6 +34,7 @@ const STEP_LABELS: { step: LabStep; label: string }[] = [
 
 const ENDPOINT: Partial<Record<LabStep, string>> = {
   architecture_issues: "architecture-issues",
+  attack_surfaces: "attack-surfaces",
   threats: "threats",
   prioritization: "prioritization",
   mitigations: "mitigations",
@@ -124,7 +127,15 @@ export function LabShell({
         }>(`${attemptBase}/${initialAttemptId}`);
         if (cancelled) return;
 
-        setStep(attempt.currentStep === "intro" ? "intro" : attempt.currentStep);
+        // Never move the learner BACKWARDS. Starting a lab calls
+        // router.refresh(), which makes the server hand this component an
+        // attemptId for the first time and re-runs this effect — with the
+        // attempt still recorded as "intro", since the first step has not
+        // been submitted yet. Assigning that straight back put the learner
+        // on the brief again, one click after pressing Start. Taking the
+        // later of the two keeps a genuine reload restoring progress while
+        // ignoring a stale "intro" arriving after we have already advanced.
+        setStep((prev) => (stepIndex(attempt.currentStep) > stepIndex(prev) ? attempt.currentStep : prev));
         if (attempt.revealedThreats) setThreats(attempt.revealedThreats);
 
         // Put the most recent coaching back on screen so returning mid-lab does
@@ -140,6 +151,7 @@ export function LabShell({
             aiFeedback: last.aiFeedbackJson ?? null,
             aiStatus: last.aiFeedbackJson ? "ok" : "unavailable",
             deterministicResult: last.deterministicResultJson ?? null,
+            revealedAttackSurfaces: null,
             revealedThreats: null,
             // Reconstructing history on page load, not a live award — no
             // toast for points already earned in a past visit.
@@ -273,6 +285,8 @@ export function LabShell({
     switch (step) {
       case "architecture_issues":
         return <ArchitectureIssuesStep selection={selection} busy={busy} onSubmit={(a) => submit("architecture_issues", a)} />;
+      case "attack_surfaces":
+        return <AttackSurfacesStep selection={selection} busy={busy} onSubmit={(a) => submit("attack_surfaces", a)} />;
       case "threats": {
         const used = threatAttempts;
         return (

@@ -13,6 +13,7 @@ import { z } from "zod";
 
 export const POINT_REASONS = [
   "architecture_submitted",
+  "attack_surface_identified",
   "threat_matched",
   "threats_clean_sweep",
   "priority_correct",
@@ -31,6 +32,7 @@ export type PointReason = z.infer<typeof pointReasonSchema>;
  */
 export const POINTS: Record<PointReason, number> = {
   architecture_submitted: 5,
+  attack_surface_identified: 8,
   threat_matched: 10,
   threats_clean_sweep: 20,
   priority_correct: 10,
@@ -78,6 +80,7 @@ export type MyPointsResponse = z.infer<typeof myPointsResponseSchema>;
  * different random one.
  */
 const CHEERS: Record<Exclude<PointReason, "architecture_submitted" | "release_submitted">, string[]> = {
+  attack_surface_identified: ["That's an entry point.", "Right — untrusted input arrives there.", "Good, that one's exposed."],
   threat_matched: ["Nice catch.", "That's a real one.", "Good eye.", "Exactly right."],
   threats_clean_sweep: ["You found every threat here — clean sweep."],
   priority_correct: ["Good call on the priority.", "That ranking matches the risk.", "Right instinct."],

@@ -12,6 +12,7 @@ import { priorityLevelSchema } from "./lab";
 
 export const AI_TASK_TYPES = [
   "architecture_feedback",
+  "attack_surface_feedback",
   "threat_matching",
   "priority_feedback",
   "mitigation_feedback",
@@ -80,6 +81,13 @@ export const mitigationFeedbackSchema = z.object({
   overallFeedback: z.string(),
 });
 
+export const attackSurfaceFeedbackSchema = z.object({
+  summary: z.string(),
+  strengths: z.array(z.string()).default([]),
+  coachingTips: z.array(z.string()).default([]),
+  confidence: confidence.default(0.5),
+});
+
 export const releaseFeedbackSchema = z.object({
   decisionReflection: z.string(),
   reasoningStrengths: z.array(z.string()).default([]),
@@ -93,6 +101,7 @@ export type ThreatMatching = z.infer<typeof threatMatchingSchema>;
 export type PriorityFeedback = z.infer<typeof priorityFeedbackSchema>;
 export type MitigationFeedback = z.infer<typeof mitigationFeedbackSchema>;
 export type ReleaseFeedback = z.infer<typeof releaseFeedbackSchema>;
+export type AttackSurfaceFeedback = z.infer<typeof attackSurfaceFeedbackSchema>;
 
 /**
  * Drops any id the model returned that we did not put in the prompt.

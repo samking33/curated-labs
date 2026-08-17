@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { MeResponse } from "@curated-labs/shared";
 import { api } from "@/lib/api";
 import { tokens } from "@/lib/tokens";
+import { SUPPORT_EMAIL } from "@/lib/support";
 
 export function AppNav({ me }: { me: MeResponse }) {
   const org = me.organizations[0];
@@ -31,6 +32,7 @@ export function AppNav({ me }: { me: MeResponse }) {
       {org && <NavLink href={`/app/org/${org.slug}`}>{org.name}</NavLink>}
       <NavLink href="/app/settings">Settings</NavLink>
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: tokens.space(3) }}>
+        <ReportIssueLink />
         <span style={{ fontSize: tokens.size.sm, color: tokens.color.textMuted }}>{me.user.email}</span>
         <button
           onClick={logout}
@@ -48,5 +50,22 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
     <Link href={href} style={{ color: tokens.color.textMuted, textDecoration: "none", fontSize: tokens.size.base }}>
       {children}
     </Link>
+  );
+}
+
+/**
+ * Somewhere to send a bug report from inside the product, rather than the
+ * learner having to know who to tell. Deliberately a plain mailto: there is
+ * no ticketing system behind this yet, and a link that opens a mail client
+ * is honest about that.
+ */
+export function ReportIssueLink() {
+  return (
+    <a
+      href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Securacy issue report")}`}
+      style={{ fontSize: tokens.size.sm, color: tokens.color.textMuted, textDecoration: "underline" }}
+    >
+      Report an issue
+    </a>
   );
 }

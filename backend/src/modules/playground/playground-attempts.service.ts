@@ -14,6 +14,8 @@ import {
   stepIndex,
   type LabStep,
   type StepResult,
+  deriveAttackSurfaces,
+  gradeAttackSurfaces,
 } from "@curated-labs/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AiService, type AiStatus } from "../ai/ai.service";
@@ -191,6 +193,7 @@ export class PlaygroundAttemptsService {
       aiFeedback: ai.feedback,
       aiStatus: ai.status,
       deterministicResult: deterministic,
+      revealedAttackSurfaces: null,
       revealedThreats: null,
       pointsAwarded: 0,
       cheers: [],
@@ -198,6 +201,53 @@ export class PlaygroundAttemptsService {
   }
 
   /* -------------------------------------------------------- step 2: threats */
+
+  /** Same derivation as the curated path: the canonical surfaces come from
+   *  the scenario's own DFD, so a generated scenario needs no extra authored
+   *  answer key for this step. */
+  async submitAttackSurfaces(
+    user: AuthContext,
+    attemptId: string,
+    answer: { text: string; referencedNodeIds: string[]; referencedEdgeIds: string[] },
+    options: SubmitOptions = {},
+  ): Promise<StepResult> {
+    const attempt = await this.loadForWrite(user, attemptId);
+    assertStepAllowed(attempt.currentStep, "attack_surfaces");
+
+    const { submission, replayed } = await this.recordSubmission(attemptId, "attack_surfaces", answer, options);
+    if (replayed) return replayResult(submission, attempt.currentStep);
+
+    const scenario = await this.generation.getScenario(user, attempt.scenarioId);
+    const canonical = deriveAttackSurfaces(scenario.dfd);
+    const graded = gradeAttackSurfaces(canonical, {
+      nodeIds: answer.referencedNodeIds,
+      edgeIds: answer.referencedEdgeIds,
+    });
+    const byId = new Map(canonical.map((c) => [c.id, c]));
+
+    const ai = await this.ai.attackSurfaceFeedback({
+      answer,
+      identified: graded.identifiedIds.flatMap((id) => byId.get(id) ?? []),
+      missed: graded.missedIds.flatMap((id) => byId.get(id) ?? []),
+      labId: attempt.scenarioId,
+      tone: "generated",
+    });
+
+    const done = await this.finish(attemptId, submission.id, "attack_surfaces", ai, graded);
+
+    return {
+      submissionId: done.submission.id,
+      attemptNumber: submission.attemptNumber,
+      currentStep: done.attempt.currentStep,
+      aiFeedback: ai.feedback,
+      aiStatus: ai.status,
+      deterministicResult: graded,
+      revealedAttackSurfaces: canonical,
+      revealedThreats: null,
+      pointsAwarded: 0,
+      cheers: [],
+    };
+  }
 
   async submitThreats(
     user: AuthContext,
@@ -248,6 +298,7 @@ export class PlaygroundAttemptsService {
       deterministicResult: { matchedThreatIds: [...matchedIds], attemptsUsed: submission.attemptNumber },
       pointsAwarded: 0,
       cheers: [],
+      revealedAttackSurfaces: null,
       revealedThreats: shouldReveal
         ? key.threats.map((t) => ({
             id: t.id,
@@ -295,6 +346,7 @@ export class PlaygroundAttemptsService {
       aiFeedback: ai.feedback,
       aiStatus: ai.status,
       deterministicResult: { comparison },
+      revealedAttackSurfaces: null,
       revealedThreats: null,
       pointsAwarded: 0,
       cheers: [],
@@ -343,6 +395,7 @@ export class PlaygroundAttemptsService {
       aiFeedback: ai.feedback,
       aiStatus: ai.status,
       deterministicResult: deterministic,
+      revealedAttackSurfaces: null,
       revealedThreats: null,
       pointsAwarded: 0,
       cheers: [],
@@ -398,6 +451,7 @@ export class PlaygroundAttemptsService {
       aiFeedback: ai.feedback,
       aiStatus: ai.status,
       deterministicResult: null,
+      revealedAttackSurfaces: null,
       revealedThreats: null,
       pointsAwarded: 0,
       cheers: [],

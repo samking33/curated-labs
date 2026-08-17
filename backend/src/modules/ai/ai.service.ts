@@ -5,6 +5,7 @@ import {
   mitigationFeedbackSchema,
   playgroundScenarioDraftSchema,
   priorityFeedbackSchema,
+  attackSurfaceFeedbackSchema,
   releaseFeedbackSchema,
   redactSecrets,
   restrictIds,
@@ -108,6 +109,33 @@ export class AiService {
       status: result.status,
       feedback: { ...result.feedback, coveredIssueIds: covered.kept, missedIssueIds: missed.kept },
     };
+  }
+
+  /* ----------------------------------------------- step 1b: attack surfaces */
+
+  /** The identified/missed split is computed by the platform and passed in —
+   *  this call only explains it. `missed` carries labels, not a hidden answer
+   *  key: the learner is about to be shown the full set anyway. */
+  async attackSurfaceFeedback(input: {
+    answer: { text: string };
+    identified: { label: string }[];
+    missed: { label: string; reason: string }[];
+    labId: string;
+    tone?: CoachingTone;
+  }): Promise<AiResult<unknown>> {
+    const labData = this.withTone(
+      [
+        "LAB DATA — attack surfaces the learner correctly identified (trusted):",
+        ...(input.identified.length ? input.identified.map((s) => `- ${s.label}`) : ["- (none)"]),
+        "",
+        "LAB DATA — attack surfaces they missed (trusted):",
+        ...(input.missed.length ? input.missed.map((s) => `- ${s.label}: ${s.reason}`) : ["- (none)"]),
+      ].join("\n"),
+      input.tone,
+    );
+    const user = [labData, "", untrusted("LEARNER ANSWER", input.answer.text)].join("\n");
+    const secrets = input.missed.map((s) => s.reason);
+    return this.run("attack_surface_feedback", user, attackSurfaceFeedbackSchema, input.labId, secrets);
   }
 
   /* ------------------------------------------------------------ step 2 */
@@ -538,6 +566,7 @@ export class AiService {
      */
     const byTask: Record<TaskKey, string[]> = {
       architecture_feedback: [fast, reasoning, json],
+      attack_surface_feedback: [fast, reasoning, json],
       threat_matching: [fast, reasoning, json],
       priority_feedback: [fast, reasoning, json],
       mitigation_feedback: [fast, json],

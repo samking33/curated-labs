@@ -37,6 +37,7 @@ export type ThreatCategory = z.infer<typeof threatCategorySchema>;
 export const LAB_STEPS = [
   "intro",
   "architecture_issues",
+  "attack_surfaces",
   "threats",
   "prioritization",
   "mitigations",

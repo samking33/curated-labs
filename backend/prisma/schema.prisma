@@ -67,6 +67,7 @@ enum AttemptStatus {
 enum LabStep {
   intro
   architecture_issues
+  attack_surfaces
   threats
   prioritization
   mitigations
@@ -104,6 +105,7 @@ enum InvitationStatus {
 
 enum AiTaskType {
   architecture_feedback
+  attack_surface_feedback
   threat_matching
   priority_feedback
   mitigation_feedback
@@ -116,6 +118,7 @@ enum AiTaskType {
 
 enum PointReason {
   architecture_submitted
+  attack_surface_identified
   threat_matched
   threats_clean_sweep
   priority_correct
@@ -134,6 +137,9 @@ model User {
   googleSubject String       @unique @map("google_subject")
   emailVerified Boolean      @default(false) @map("email_verified")
   accountKind   AccountKind? @map("account_kind")
+  /// Learners can keep their name off the public leaderboard without losing
+  /// their own points or progress.
+  leaderboardOptOut Boolean  @default(false) @map("leaderboard_opt_out")
   lastLoginAt   DateTime?    @map("last_login_at") @db.Timestamptz(6)
   disabledAt    DateTime?    @map("disabled_at") @db.Timestamptz(6)
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)

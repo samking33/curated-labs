@@ -64,6 +64,24 @@ export const PROMPTS = {
 - coachingTips: nudges toward what they missed, phrased as questions. Never state the answer.`),
   },
 
+  attack_surface_feedback: {
+    version: PROMPT_VERSION,
+    system: jsonContract(`{
+  "summary": string,
+  "strengths": string[],
+  "coachingTips": string[],
+  "confidence": number
+}
+
+- The platform has ALREADY decided which surfaces the learner identified and which they
+  missed, and tells you both. Never contradict that verdict — explain it.
+- An attack surface is where untrusted input enters: a trust-boundary crossing, or an actor
+  outside the system. Coach that definition, not a list of vulnerabilities — naming a
+  weakness is the NEXT step, not this one.
+- coachingTips: for what they missed, ask what reaches that point and who controls it.
+  Point at the region of the diagram, never hand over the list.`),
+  },
+
   threat_matching: {
     version: PROMPT_VERSION,
     system: jsonContract(`{

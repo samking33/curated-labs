@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Headers, Param, Post } from "@nestjs/common";
 import {
   architectureIssuesSubmissionSchema,
+  attackSurfacesSubmissionSchema,
   mitigationsSubmissionSchema,
   prioritizationSubmissionSchema,
   releaseDecisionSubmissionSchema,
@@ -49,6 +50,21 @@ export class PlaygroundAttemptsController {
       user,
       attemptId,
       body as Parameters<PlaygroundAttemptsService["submitArchitectureIssues"]>[2],
+      { idempotencyKey: key },
+    );
+  }
+
+  @Post("attempts/:attemptId/steps/attack-surfaces")
+  attackSurfaces(
+    @CurrentUser() user: AuthContext,
+    @Param("attemptId") attemptId: string,
+    @Body(new ZodValidationPipe(attackSurfacesSubmissionSchema)) body: unknown,
+    @Headers("idempotency-key") key?: string,
+  ) {
+    return this.attempts.submitAttackSurfaces(
+      user,
+      attemptId,
+      body as Parameters<PlaygroundAttemptsService["submitAttackSurfaces"]>[2],
       { idempotencyKey: key },
     );
   }

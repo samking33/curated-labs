@@ -8,3 +8,4 @@ export * from "./api/index";
 export * from "./constants/index";
 export * from "./dfd-layout";
 export * from "./dfd-xml";
+export * from "./attack-surface";

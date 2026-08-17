@@ -24,6 +24,7 @@ describe("AUTHOR_PROMPTS stays isolated from PROMPTS", () => {
     expect(Object.keys(PROMPTS).sort()).toEqual(
       [
         "architecture_feedback",
+        "attack_surface_feedback",
         "threat_matching",
         "priority_feedback",
         "mitigation_feedback",

@@ -131,7 +131,10 @@ describe("prompt injection defenses", () => {
 describe("step ordering", () => {
   it("advances through the workflow in the order the spec defines", () => {
     expect(nextStep("intro")).toBe("architecture_issues");
-    expect(nextStep("architecture_issues")).toBe("threats");
+    // Attack surfaces sit between architectural analysis and threats: you
+    // establish where untrusted input enters before naming what goes wrong.
+    expect(nextStep("architecture_issues")).toBe("attack_surfaces");
+    expect(nextStep("attack_surfaces")).toBe("threats");
     expect(nextStep("threats")).toBe("prioritization");
     expect(nextStep("prioritization")).toBe("mitigations");
     expect(nextStep("mitigations")).toBe("release_decision");
@@ -144,7 +147,7 @@ describe("step ordering", () => {
 
   it("orders steps so skipping ahead is detectable", () => {
     // AttemptsService rejects target > current + 1 using exactly this ordering.
-    expect(stepIndex("mitigations") - stepIndex("architecture_issues")).toBe(3);
+    expect(stepIndex("mitigations") - stepIndex("architecture_issues")).toBe(4);
     expect(labStepSchema.safeParse("not_a_step").success).toBe(false);
   });
 });

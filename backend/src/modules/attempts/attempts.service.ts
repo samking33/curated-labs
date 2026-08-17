@@ -3,6 +3,9 @@ import { createHash } from "node:crypto";
 import {
   POINTS,
   THREAT_RETRY_LIMIT,
+  deriveAttackSurfaces,
+  extractFromDrawioXml,
+  gradeAttackSurfaces,
   can,
   canViewAttempt,
   isUuid,
@@ -279,10 +282,86 @@ export class AttemptsService {
       aiFeedback: ai.feedback,
       aiStatus: ai.status,
       deterministicResult: deterministic,
-      revealedThreats: null,
+      revealedAttackSurfaces: null,
+    revealedThreats: null,
       pointsAwarded,
       cheers: [],
     };
+  }
+
+  /* ------------------------------------------------ step 1b: attack surfaces */
+
+  /**
+   * Where untrusted input enters. The canonical set is derived from the DFD
+   * (deriveAttackSurfaces) rather than authored per lab — an attack surface is
+   * a property of the architecture, so computing it keeps the answer key
+   * correct for generated scenarios and for any lab whose diagram is edited.
+   *
+   * Correctness comes from which nodes/edges the learner attached, decided
+   * here before the model is called; the coach only explains that verdict.
+   */
+  async submitAttackSurfaces(
+    user: AuthContext,
+    attemptId: string,
+    answer: { text: string; referencedNodeIds: string[]; referencedEdgeIds: string[] },
+    options: SubmitOptions = {},
+  ): Promise<StepResult> {
+    const attempt = await this.loadForWrite(user, attemptId);
+    assertStepAllowed(attempt.currentStep, "attack_surfaces");
+
+    const { submission, replayed } = await this.recordSubmission(attemptId, "attack_surfaces", answer, options);
+    if (replayed) return replayResult(submission, attempt.currentStep);
+
+    const graph = await this.graphFor(attempt.labId);
+    const canonical = deriveAttackSurfaces(graph);
+    const graded = gradeAttackSurfaces(canonical, {
+      nodeIds: answer.referencedNodeIds,
+      edgeIds: answer.referencedEdgeIds,
+    });
+
+    const byId = new Map(canonical.map((c) => [c.id, c]));
+    const ai = await this.ai.attackSurfaceFeedback({
+      answer,
+      identified: graded.identifiedIds.flatMap((id) => byId.get(id) ?? []),
+      missed: graded.missedIds.flatMap((id) => byId.get(id) ?? []),
+      labId: attempt.labId,
+    });
+
+    const done = await this.finish(attemptId, submission.id, "attack_surfaces", ai, graded);
+
+    const candidates: PointCandidate[] = graded.identifiedIds.map((id) => ({
+      reason: "attack_surface_identified",
+      refId: id,
+      amount: POINTS.attack_surface_identified,
+    }));
+    const { pointsAwarded, cheers } = await this.scoreAndCheer(attempt, candidates);
+
+    return {
+      submissionId: done.submission.id,
+      attemptNumber: submission.attemptNumber,
+      currentStep: done.attempt.currentStep,
+      aiFeedback: ai.feedback,
+      aiStatus: ai.status,
+      deterministicResult: graded,
+      // Shown straight after grading so the learner can compare — this is the
+      // teaching moment for the step, and nothing here is a hidden answer key
+      // for a later one.
+      revealedAttackSurfaces: canonical,
+      revealedThreats: null,
+      pointsAwarded,
+      cheers,
+    };
+  }
+
+  /** The lab's current DFD as a graph, for steps that reason about structure. */
+  private async graphFor(labId: string) {
+    const dfd = await this.prisma.labDfd.findFirst({
+      where: { labId },
+      orderBy: { version: "desc" },
+      select: { drawioXml: true },
+    });
+    if (!dfd) throw new NotFoundException("This lab has no diagram yet.");
+    return extractFromDrawioXml(dfd.drawioXml);
   }
 
   /* -------------------------------------------------------- step 2: threats */
@@ -361,6 +440,7 @@ export class AttemptsService {
       deterministicResult: { matchedThreatIds: [...matchedIds], attemptsUsed: submission.attemptNumber },
       pointsAwarded,
       cheers,
+      revealedAttackSurfaces: null,
       revealedThreats: shouldReveal
         ? canonical.map((t) => ({
             id: t.id,
@@ -408,7 +488,8 @@ export class AttemptsService {
       aiFeedback: ai.feedback,
       aiStatus: ai.status,
       deterministicResult: { comparison },
-      revealedThreats: null,
+      revealedAttackSurfaces: null,
+    revealedThreats: null,
       pointsAwarded,
       cheers,
     };
@@ -457,7 +538,8 @@ export class AttemptsService {
       aiFeedback: ai.feedback,
       aiStatus: ai.status,
       deterministicResult: deterministic,
-      revealedThreats: null,
+      revealedAttackSurfaces: null,
+    revealedThreats: null,
       pointsAwarded,
       cheers,
     };
@@ -538,7 +620,8 @@ export class AttemptsService {
       aiFeedback: feedback,
       aiStatus: ai.status,
       deterministicResult: null,
-      revealedThreats: null,
+      revealedAttackSurfaces: null,
+    revealedThreats: null,
       pointsAwarded,
       cheers,
     };
@@ -636,7 +719,8 @@ export class AttemptsService {
       aiFeedback: submission.aiFeedbackJson ?? null,
       aiStatus: submission.aiFeedbackJson ? "ok" : "unavailable",
       deterministicResult: submission.deterministicResultJson ?? null,
-      revealedThreats: null,
+      revealedAttackSurfaces: null,
+    revealedThreats: null,
       // A replay is a retried request for an answer already scored — the
       // points and cheer already reached the client on the original response.
       pointsAwarded: 0,

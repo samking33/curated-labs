@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "@/lib/navigation";
-import type { MeResponse, Progress } from "@curated-labs/shared";
+import { LAB_STEPS, type MeResponse, type Progress } from "@curated-labs/shared";
 import { tokens } from "@/lib/tokens";
 import { formatTimeAgo } from "@/lib/format";
 import { HeroHeader, TopNav } from "./Chrome";
@@ -13,20 +13,15 @@ import { AiAssistantCard } from "./AiAssistantCard";
 /** The five lab steps, mapped onto the dial's checkpoints. */
 const SEGMENTS: Segment[] = [
   { label: "Architecture", icon: "book", step: "architecture_issues" },
+  { label: "Surfaces", icon: "book", step: "attack_surfaces" },
   { label: "Threats", icon: "headphones", step: "threats" },
   { label: "Priority", icon: "bulb", step: "prioritization" },
   { label: "Mitigations", icon: "badge", step: "mitigations" },
 ];
 
-const STEP_ORDER = [
-  "intro",
-  "architecture_issues",
-  "threats",
-  "prioritization",
-  "mitigations",
-  "release_decision",
-  "completed",
-] as const;
+/** The dial counts the five answerable steps, so it walks the shared order
+ *  rather than keeping a second copy that drifts when a step is added. */
+const STEP_ORDER = LAB_STEPS;
 
 export function Dashboard({
   me,

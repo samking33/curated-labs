@@ -142,6 +142,17 @@ export const architectureIssuesSubmissionSchema = z.object({
   referencedEdgeIds: z.array(z.string()).default([]),
 });
 
+/**
+ * Attack surfaces are picked off the diagram, not typed — the learner selects
+ * the nodes and flows where untrusted input enters, and explains why. Grading
+ * is on the selection; the prose is what the coach responds to.
+ */
+export const attackSurfacesSubmissionSchema = z.object({
+  text: answerText(4000),
+  referencedNodeIds: z.array(z.string()).default([]),
+  referencedEdgeIds: z.array(z.string()).default([]),
+});
+
 export const threatsSubmissionSchema = z.object({
   threats: z.array(answerText(1000)).min(1).max(40),
   referencedNodeIds: z.array(z.string()).default([]),
@@ -181,6 +192,19 @@ export const stepResultSchema = z.object({
   aiFeedback: z.unknown().nullable(),
   aiStatus: z.enum(["ok", "unavailable", "invalid"]),
   deterministicResult: z.unknown().nullable(),
+  /** The full attack-surface set, returned after that step is submitted so
+   *  the learner can compare against what they picked. Never sent earlier. */
+  revealedAttackSurfaces: z
+    .array(
+      z.object({
+        id: z.string(),
+        kind: z.enum(["node", "edge"]),
+        label: z.string(),
+        reason: z.string(),
+      }),
+    )
+    .nullable()
+    .default(null),
   /** Populated only once the reveal rules in §8 step 2 allow it. */
   revealedThreats: z
     .array(

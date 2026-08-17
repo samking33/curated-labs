@@ -97,6 +97,13 @@
       graph.setConnectable(false);
     }
 
+    // Expose the live instance on the iframe's own window. Attack-surface
+    // identification is a graded step driven entirely by selecting cells, and
+    // without a handle there is no way to drive that selection from a test —
+    // clicking blind at canvas coordinates is not a check anyone can trust.
+    // Same-origin only, and the parent frame already controls this editor.
+    window.__dfdEditor = { ui: ui, graph: graph };
+
     graph.getSelectionModel().addListener(mxEvent.CHANGE, function () {
       var cells = graph.getSelectionCells();
       var payload = { event: "dfd-selection", kind: null, id: null };

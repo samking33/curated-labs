@@ -62,6 +62,66 @@ export function ArchitectureIssuesStep({
   );
 }
 
+/* ----------------------------------------------------------- step 1b */
+
+/**
+ * Attack surfaces: where untrusted input actually enters. Graded on what the
+ * learner attaches from the diagram, not on the prose, so the picker is the
+ * primary control here rather than a secondary one.
+ */
+export function AttackSurfacesStep({
+  selection,
+  onSubmit,
+  busy,
+}: {
+  selection: DfdSelection;
+  onSubmit: (answer: { text: string; referencedNodeIds: string[]; referencedEdgeIds: string[] }) => void;
+  busy: boolean;
+}) {
+  const [text, setText] = useState("");
+  const [refs, setRefs] = useState<{ nodes: string[]; edges: string[] }>({ nodes: [], edges: [] });
+  const picked = refs.nodes.length + refs.edges.length;
+
+  const attach = () => {
+    if (!selection) return;
+    setRefs((prev) =>
+      selection.kind === "node"
+        ? { ...prev, nodes: [...new Set([...prev.nodes, selection.node.id])] }
+        : { ...prev, edges: [...new Set([...prev.edges, selection.edge.id])] },
+    );
+  };
+
+  return (
+    <Card>
+      <StepHeading n={2} title="Where can untrusted input reach this system?" />
+      <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm, marginTop: 0 }}>
+        Click a box or an arrow in the diagram, then attach it. An attack surface is anywhere data
+        crosses a trust boundary, or anyone outside the system talks to it — not a weakness yet,
+        just a way in.
+      </p>
+
+      <RefPicker selection={selection} refs={refs} onAttach={attach} onClear={() => setRefs({ nodes: [], edges: [] })} />
+
+      <Field label="Why are those the ways in?" hint="One or two sentences on what an attacker controls at those points.">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={5}
+          style={{ ...inputStyle, resize: "vertical", fontFamily: tokens.font.sans }}
+          placeholder="e.g. the browser reaches the storefront over the public internet, so everything in that request is attacker-controlled"
+        />
+      </Field>
+
+      <Button
+        onClick={() => onSubmit({ text, referencedNodeIds: refs.nodes, referencedEdgeIds: refs.edges })}
+        disabled={busy || picked === 0 || text.trim().length < 10}
+      >
+        {busy ? "Checking…" : picked === 0 ? "Attach at least one from the diagram" : `Submit ${picked} attack surface${picked === 1 ? "" : "s"}`}
+      </Button>
+    </Card>
+  );
+}
+
 /* ------------------------------------------------------------ step 2 */
 
 export function ThreatIdentificationStep({
@@ -94,7 +154,7 @@ export function ThreatIdentificationStep({
 
   return (
     <Card>
-      <StepHeading n={2} title="What threats exist in this system?" />
+      <StepHeading n={3} title="What threats exist in this system?" />
       {attemptNumber > 1 && (
         <div
           role="status"
@@ -198,7 +258,7 @@ export function PrioritizationStep({
 
   return (
     <Card>
-      <StepHeading n={3} title="Prioritize the key threats and explain your reasoning." />
+      <StepHeading n={4} title="Prioritize the key threats and explain your reasoning." />
       <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm }}>
         The reasoning matters more than the label. A well-argued disagreement is a good answer.
       </p>
@@ -271,7 +331,7 @@ export function MitigationMatchingStep({
 
   return (
     <Card>
-      <StepHeading n={4} title="Match each threat to the best mitigation." />
+      <StepHeading n={5} title="Match each threat to the best mitigation." />
       <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm }}>
         This is the one step with a definite answer. There are more mitigations than threats.
       </p>
@@ -327,7 +387,7 @@ export function ReleaseDecisionStep({
 
   return (
     <Card>
-      <StepHeading n={5} title="Would you release this system?" />
+      <StepHeading n={6} title="Would you release this system?" />
       <div style={{ display: "flex", gap: tokens.space(2), marginBottom: tokens.space(4), flexWrap: "wrap" }}>
         {DECISIONS.map((d) => {
           const active = decision === d.value;
