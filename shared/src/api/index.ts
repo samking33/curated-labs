@@ -128,14 +128,22 @@ export type LabDetail = z.infer<typeof labDetailSchema>;
 
 /* ------------------------------------------------------------- attempts */
 
+/**
+ * Free-text answers are trimmed before length is checked, so whitespace can
+ * never satisfy a minimum. Reported from real use as "I entered two threats
+ * and kept the next one blank. It accepted a blank threat" — the UI drops
+ * empty rows, but the API itself would have taken a single space.
+ */
+const answerText = (max: number) => z.string().trim().min(1).max(max);
+
 export const architectureIssuesSubmissionSchema = z.object({
-  text: z.string().min(1).max(8000),
+  text: answerText(8000),
   referencedNodeIds: z.array(z.string()).default([]),
   referencedEdgeIds: z.array(z.string()).default([]),
 });
 
 export const threatsSubmissionSchema = z.object({
-  threats: z.array(z.string().min(1).max(1000)).min(1).max(40),
+  threats: z.array(answerText(1000)).min(1).max(40),
   referencedNodeIds: z.array(z.string()).default([]),
   referencedEdgeIds: z.array(z.string()).default([]),
 });
@@ -146,7 +154,7 @@ export const prioritizationSubmissionSchema = z.object({
       z.object({
         threatId: z.string().uuid(),
         priority: priorityLevelSchema,
-        rationale: z.string().min(1).max(2000),
+        rationale: answerText(2000),
       }),
     )
     .min(1),
@@ -160,8 +168,8 @@ export const mitigationsSubmissionSchema = z.object({
 
 export const releaseDecisionSubmissionSchema = z.object({
   decision: releaseDecisionSchema,
-  rationale: z.string().min(1).max(4000),
-  conditions: z.string().max(4000).optional(),
+  rationale: answerText(4000),
+  conditions: z.string().trim().max(4000).optional(),
 });
 
 /** Every step returns the same envelope so the UI has one rendering path. */

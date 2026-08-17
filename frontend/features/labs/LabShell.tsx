@@ -23,10 +23,10 @@ import {
 
 const STEP_LABELS: { step: LabStep; label: string }[] = [
   { step: "intro", label: "Brief" },
-  { step: "architecture_issues", label: "Architecture" },
-  { step: "threats", label: "Threats" },
-  { step: "prioritization", label: "Priority" },
-  { step: "mitigations", label: "Mitigations" },
+  { step: "architecture_issues", label: "Architectural analysis" },
+  { step: "threats", label: "Threat identification" },
+  { step: "prioritization", label: "Assessing priority" },
+  { step: "mitigations", label: "Mitigation mapping" },
   { step: "release_decision", label: "Decision" },
 ];
 
@@ -75,6 +75,21 @@ export function LabShell({
   // Only set when a submission actually earned a "correct answer" cheer —
   // the flat participation awards on steps 1 and 5 never populate this.
   const [cheer, setCheer] = useState<{ key: string; points: number; cheers: string[] } | null>(null);
+
+  /**
+   * Set after a submission that advances the lab, holding the step to move to
+   * once the learner has actually read the coaching for the step they just
+   * finished.
+   *
+   * Without this the workflow advanced the instant a step was submitted, so
+   * the next step's form rendered directly above its own feedback — the
+   * revealed threat list appeared *below* the prioritization table, and the
+   * priority and mitigation coaching was skipped past entirely. Both were
+   * reported from real use: "it goes to prioritization and then I need to
+   * scroll down to look at the detailed threat list", and "it did not show me
+   * priority reasoning, it directly jumped to the next step".
+   */
+  const [pendingStep, setPendingStep] = useState<LabStep | null>(null);
 
   /**
    * The threat list used by steps 3 and 4. It only ever comes from a reveal
@@ -179,7 +194,12 @@ export function LabShell({
         if (res.cheers.length > 0) {
           setCheer({ key: res.submissionId, points: res.pointsAwarded, cheers: res.cheers });
         }
-        setStep(res.currentStep);
+        // Staying on the same step means a retry (threats, before reveal) —
+        // the learner needs the form back immediately. Reaching "completed"
+        // ends the lab, and its own summary already shows everything. Any
+        // other advance pauses on the coaching first.
+        if (res.currentStep === target || res.currentStep === "completed") setStep(res.currentStep);
+        else setPendingStep(res.currentStep);
       } catch (err) {
         setError(messageFor(err));
       } finally {
@@ -390,14 +410,51 @@ export function LabShell({
         <div style={{ display: "grid", gap: tokens.space(4), alignContent: "start", minWidth: 0 }}>
           {error && <Alert tone="error">{error}</Alert>}
           <NodeDetailsPanel selection={selection} />
-          {body}
+          {/* While reviewing, the next step's form stays hidden so the
+              coaching below is the only thing on screen to read. */}
+          {pendingStep ? <StepDone label={labelFor(step)} /> : body}
           <FeedbackPanel result={result} loading={busy && Boolean(result)} error={null} />
+          {pendingStep && (
+            <Card>
+              <p style={{ margin: `0 0 ${tokens.space(3)}`, color: tokens.color.textMuted, fontSize: tokens.size.sm }}>
+                Read the feedback above, then carry on when you are ready.
+              </p>
+              <Button
+                onClick={() => {
+                  setStep(pendingStep);
+                  setPendingStep(null);
+                }}
+              >
+                {`Continue to ${labelFor(pendingStep).toLowerCase()} →`}
+              </Button>
+            </Card>
+          )}
           {(!attemptId || step === "intro") && (
             <Roadmap steps={STEP_LABELS} currentIndex={currentIndex} />
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function labelFor(step: LabStep): string {
+  return STEP_LABELS.find((s) => s.step === step)?.label ?? "the next step";
+}
+
+/** Placeholder where the step's form was, so the column doesn't jump to the
+ *  feedback with no indication of what was just submitted. */
+function StepDone({ label }: { label: string }) {
+  return (
+    <Card>
+      <div style={{ display: "flex", alignItems: "center", gap: tokens.space(3) }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden style={{ flexShrink: 0 }}>
+          <circle cx="12" cy="12" r="9.2" stroke={tokens.color.accent} strokeWidth="1.7" />
+          <path d="M8 12.3l2.7 2.7L16 9.7" stroke={tokens.color.accent} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <strong style={{ fontSize: tokens.size.lg }}>{label} submitted</strong>
+      </div>
+    </Card>
   );
 }
 

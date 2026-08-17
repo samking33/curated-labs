@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { tokens } from "@/lib/tokens";
 import { Mascot, type Mood } from "./Mascot";
 import { useCoachChat } from "./useCoachChat";
 
 const TUCKED_KEY = "securacy:buddy-tucked";
+/**
+ * Routes that already embed the coach in the page itself. Mounting the
+ * floating one there too put two chat windows onto a single screen, talking
+ * to the same endpoint — reported as "I have 3 places on the same page to
+ * talk to AI Assistant or Coach".
+ */
+const ROUTES_WITH_INLINE_COACH = ["/app/dashboard"];
 const PROMPTS = [
   "Need a hand?",
   "Stuck on this one?",
@@ -23,6 +31,7 @@ const PROMPTS = [
  * vanishes for good takes the feature with it.
  */
 export function CoachBuddy() {
+  const pathname = usePathname();
   const [peeking, setPeeking] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [open, setOpen] = useState(false);
@@ -102,6 +111,8 @@ export function CoachBuddy() {
   // Nothing renders until sessionStorage has been read, so the character
   // cannot flash in and out on first paint.
   if (!ready) return null;
+  // The page already has the coach inline — one per screen.
+  if (ROUTES_WITH_INLINE_COACH.some((r) => pathname?.startsWith(r))) return null;
 
   // Tucked: a small handle stays clipped to the edge. One click brings it back.
   if (tucked) {

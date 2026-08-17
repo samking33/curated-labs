@@ -11,10 +11,10 @@ export const metadata = { title: "Progress — Securacy" };
 
 const STEP_LABEL: Record<string, string> = {
   intro: "Brief",
-  architecture_issues: "Architecture",
-  threats: "Threats",
-  prioritization: "Priority",
-  mitigations: "Mitigations",
+  architecture_issues: "Architectural analysis",
+  threats: "Threat identification",
+  prioritization: "Assessing priority",
+  mitigations: "Mitigation mapping",
   release_decision: "Decision",
   completed: "Completed",
 };

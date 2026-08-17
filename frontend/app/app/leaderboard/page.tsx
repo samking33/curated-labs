@@ -28,8 +28,9 @@ export default async function LeaderboardPage() {
       <main style={{ padding: `0 ${tokens.space(8)} ${tokens.space(8)}`, maxWidth: 720, margin: "0 auto" }}>
         <h1 style={{ fontSize: tokens.size.xxl, fontWeight: 500 }}>Leaderboard</h1>
         <p style={{ color: tokens.color.textMuted, marginTop: 0 }}>
-          Points come from what the coach already checks — matched threats, correct priorities, correct
-          mitigation pairs — plus a little for finishing each step.
+          Points are calculated based on the Coach&apos;s assessment of threats identified,
+          prioritization, and mitigations mapped, with additional points awarded for completing each
+          step.
         </p>
 
         <LeaderboardView global={global ?? EMPTY} organization={organization} orgName={org?.name} />

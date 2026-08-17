@@ -29,10 +29,10 @@ export default async function LivePage() {
             boxShadow: tokens.shadow.card,
           }}
         >
-          <p style={{ margin: 0, fontSize: tokens.size.lg }}>Not available yet.</p>
+          <p style={{ margin: 0, fontSize: tokens.size.lg }}>We&apos;re working on it!</p>
           <p style={{ color: tokens.color.textMuted, lineHeight: 1.6 }}>
-            Scheduled sessions with an instructor are planned but not part of this build — the
-            current release covers self-paced curated labs only.
+            Live, scheduled sessions with instructors are coming soon. In the meantime, explore our
+            self-paced curated labs and start learning right away.
           </p>
           <Link href="/app/catalog" style={{ color: tokens.color.accent }}>
             Browse curated labs instead →

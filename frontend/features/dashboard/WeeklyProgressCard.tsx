@@ -87,7 +87,20 @@ export function WeeklyProgressCard({
   return (
     <section style={{ ...card(), padding: tokens.space(5) }}>
       {/* Day strip: status only. Not a selector — there is no per-day view for
-          it to switch to, so it no longer pretends to be clickable. */}
+          it to switch to. It stopped *looking* clickable a while back, but it
+          was still read as one ("I cannot click on other days"), so it now
+          says what it is rather than leaving people to infer it. */}
+      <div
+        style={{
+          fontSize: tokens.size.xs,
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          color: tokens.color.textFaint,
+          marginBottom: tokens.space(3),
+        }}
+      >
+        Your activity this week
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: tokens.space(2) }}>
         {DAYS.map((d, i) => {
           const active = i === todayIndex;

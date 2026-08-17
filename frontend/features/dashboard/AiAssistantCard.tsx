@@ -66,7 +66,7 @@ export function AiAssistantCard({
       >
         <SparkleIcon color={tokens.color.text} size={22} />
         <h2 style={{ margin: 0, flex: 1, fontSize: tokens.size.xl, fontWeight: 500, color: tokens.color.text }}>
-          Ai Assistant
+          AI Assistant
         </h2>
         {chat.turns.length > 0 && (
           <IconButton label="Clear conversation" onClick={chat.reset}>
