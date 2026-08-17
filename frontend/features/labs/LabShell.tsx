@@ -95,6 +95,16 @@ export function LabShell({
   const [pendingStep, setPendingStep] = useState<LabStep | null>(null);
 
   /**
+   * Full-screen diagram. Fitted into the side panel the DFD renders at about
+   * 35% zoom, which puts a node at roughly 67x32 real pixels — too small to
+   * read and an awkward click target, which is most of why selecting felt
+   * unreliable. Expanding restyles the SAME container rather than moving or
+   * re-rendering the iframe, so the editor is never reloaded and the current
+   * selection survives the toggle.
+   */
+  const [expanded, setExpanded] = useState(false);
+
+  /**
    * Read-only look-back. Holds the finished step being reviewed, if any.
    * Submitted answers cannot be changed — the server has already graded them
    * and awarded points — so this shows what was said and what the coach
@@ -241,6 +251,14 @@ export function LabShell({
     },
     [attemptId, attemptBase],
   );
+
+  // Escape is the expected way out of anything full-screen.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
 
   const currentIndex = STEP_LABELS.findIndex((s) => s.step === step);
 
@@ -393,20 +411,59 @@ export function LabShell({
           padding: tokens.space(7),
         }}
       >
-        <div style={{ position: "sticky", top: 150, display: "grid", gap: tokens.space(2) }}>
+        <div
+          style={
+            expanded
+              ? { position: "fixed", inset: 0, zIndex: 60, background: tokens.color.bg, display: "grid", gridTemplateRows: "1fr auto", gap: 0, padding: tokens.space(3) }
+              : { position: "sticky", top: 150, display: "grid", gap: tokens.space(2) }
+          }
+        >
         <section
           style={{
+            position: "relative",
             // Tuned to the diagrams rather than the viewport: the flat layouts
             // are wide and short, so fitting is width-bound and extra height
             // just adds empty canvas above and below the graph.
-            height: "min(74vh, 660px)",
-            minHeight: 440,
-            borderRadius: tokens.radius.xl,
+            height: expanded ? "100%" : "min(74vh, 660px)",
+            minHeight: expanded ? 0 : 440,
+            borderRadius: expanded ? tokens.radius.lg : tokens.radius.xl,
             overflow: "hidden",
             boxShadow: tokens.shadow.card,
             border: `1px solid ${tokens.color.border}`,
           }}
         >
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? "Exit full screen" : "View diagram full screen"}
+            style={{
+              position: "absolute",
+              top: tokens.space(3),
+              right: tokens.space(3),
+              zIndex: 5,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: tokens.space(2),
+              padding: `${tokens.space(2)} ${tokens.space(3)}`,
+              borderRadius: tokens.radius.md,
+              border: `1px solid ${tokens.color.borderStrong}`,
+              background: tokens.color.surface,
+              color: tokens.color.text,
+              fontSize: tokens.size.sm,
+              fontFamily: tokens.font.sans,
+              cursor: "pointer",
+              boxShadow: tokens.shadow.card,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+              {expanded ? (
+                <path d="M9 3v6H3M15 21v-6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              ) : (
+                <path d="M3 9V3h6M21 15v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              )}
+            </svg>
+            {expanded ? "Exit full screen (Esc)" : "Full screen"}
+          </button>
           <DfdEditorFrame
             graph={lab.dfd}
             // Editable for the whole workflow whenever this scenario has a
@@ -414,6 +471,7 @@ export function LabShell({
             // dfdSavePath and stay view-only throughout, as intended).
             mode={dfdSavePath ? "edit" : "view"}
             onSelectionChange={setSelection}
+            onEscape={() => setExpanded(false)}
             onSave={
               dfdSavePath
                 ? async (xml) => {
@@ -434,6 +492,12 @@ export function LabShell({
             }
           />
         </section>
+
+        {expanded && (
+          <div style={{ padding: `${tokens.space(3)} 0 0`, maxWidth: 560 }}>
+            <NodeDetailsPanel selection={selection} />
+          </div>
+        )}
 
         {/* Same wording for curated and generated DFDs (dfdSavePath only
             distinguishes editability) — neither is a real system, both are

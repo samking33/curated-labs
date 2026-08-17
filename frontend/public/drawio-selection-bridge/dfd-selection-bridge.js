@@ -97,15 +97,104 @@
       graph.setConnectable(false);
     }
 
+    if (isViewMode) {
+      /*
+       * Click-to-select, done ourselves.
+       *
+       * Re-enabling graph.isEnabled() above is enough for the mouse pipeline
+       * to run, but chromeless (lightbox) mode never wires up the handler
+       * that turns a click into a selection — verified live: isEnabled(),
+       * isCellsSelectable() and useLeftButtonForPanning all read correctly,
+       * a programmatic setSelectionCell() works, and clicking a node still
+       * selected nothing. Rather than hunt which internal handler drawio
+       * left disabled, hit-test with mxGraph's own public getCellAt and set
+       * the selection directly. Independent of drawio's internals, so a
+       * future vendored version cannot quietly break it again.
+       */
+      graph.container.addEventListener("click", function (evt) {
+        var pt = mxUtils.convertPoint(graph.container, mxEvent.getClientX(evt), mxEvent.getClientY(evt));
+        var cell = graph.getCellAt(pt.x, pt.y);
+        // Trust boundaries are backdrops, not answers - clicking one should
+        // not steal the selection from the node sitting inside it.
+        if (cell && cell.getAttribute && cell.getAttribute("dfdKind", null) === "boundary") cell = null;
+        if (cell) graph.setSelectionCell(cell);
+        else graph.clearSelection();
+      });
+    }
+
+    /*
+     * Re-fit when the frame is resized.
+     *
+     * The diagram is fitted once at load. Expanding the panel to full screen
+     * grows the iframe but left the zoom where it was, so the "bigger" view
+     * showed the same 35%-scale diagram in a larger empty canvas — measured:
+     * a node stayed 67px wide either way. chromelessResize recomputes the
+     * fit; graph.fit is the fallback if a future build drops it.
+     */
+    var refit = function () {
+      try {
+        /*
+         * Fit the CONTENT, not the page. chromelessResize fits draw.io's
+         * page format, and the compiled document declares a letter-sized
+         * page while these diagrams are much wider than one — so it chose
+         * scale 0.40 for a 1374px-wide container that comfortably fits 0.66,
+         * i.e. full screen barely looked bigger. graph.fit measures the
+         * actual graph bounds.
+         *
+         * maxFitScale caps at natural size: a 7-node diagram in a wide
+         * window would otherwise blow up past 100% and look broken.
+         */
+        graph.maxFitScale = 1;
+        // fit() already sets the scale AND scrolls the content into view.
+        // Calling center() afterwards fought it and pushed the top-left of
+        // the diagram off-screen to negative coordinates, so nodes there
+        // could not be clicked at all.
+        graph.fit(12);
+      } catch (e) {
+        /* a failed refit must never break selection */
+      }
+    };
+    var refitTimer = null;
+    window.addEventListener("resize", function () {
+      // Coalesce: the browser fires these in bursts during a transition.
+      if (refitTimer) clearTimeout(refitTimer);
+      refitTimer = setTimeout(refit, 120);
+    });
+
+    /*
+     * Forward Escape to the parent.
+     *
+     * Clicking a node moves focus into this iframe, so a keydown listener on
+     * the parent window never sees Escape afterwards — which is precisely
+     * when someone wants out of the full-screen diagram, because they just
+     * clicked something in it.
+     */
+    window.addEventListener("keydown", function (evt) {
+      if (evt.key === "Escape") window.parent.postMessage(JSON.stringify({ event: "dfd-escape" }), "*");
+    });
+
     // Expose the live instance on the iframe's own window. Attack-surface
     // identification is a graded step driven entirely by selecting cells, and
     // without a handle there is no way to drive that selection from a test —
     // clicking blind at canvas coordinates is not a check anyone can trust.
     // Same-origin only, and the parent frame already controls this editor.
-    window.__dfdEditor = { ui: ui, graph: graph };
+    window.__dfdEditor = { ui: ui, graph: graph, refit: refit };
+
+    /*
+     * Draw the selection ourselves.
+     *
+     * Chromeless mode suppresses draw.io's own selection handles, so a
+     * selected node looked identical to an unselected one — measured live,
+     * zero handles rendered while the cell really was selected and the
+     * details panel really had updated. That is the whole of "it doesn't
+     * feel like they get selected". mxCellHighlight is mxGraph's own
+     * primitive for exactly this and needs no styling of the cell itself.
+     */
+    var highlight = typeof mxCellHighlight !== "undefined" ? new mxCellHighlight(graph, "#0F9D58", 3) : null;
 
     graph.getSelectionModel().addListener(mxEvent.CHANGE, function () {
       var cells = graph.getSelectionCells();
+      if (highlight) highlight.highlight(cells.length === 1 ? graph.view.getState(cells[0]) : null);
       var payload = { event: "dfd-selection", kind: null, id: null };
 
       if (cells.length === 1) {

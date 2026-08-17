@@ -24,11 +24,14 @@ export function DfdEditorFrame({
   graph,
   mode,
   onSelectionChange,
+  onEscape,
   onSave,
 }: {
   graph: DfdGraph;
   mode: "view" | "edit";
   onSelectionChange: (selection: DfdSelection) => void;
+  /** Escape pressed inside the editor. */
+  onEscape?: () => void;
   /** Called with the raw draw.io XML on save. Extraction and referential
    *  validation happen server-side (PATCH .../dfd) — never trust a
    *  client-derived DfdGraph for the authoritative check. */
@@ -54,11 +57,13 @@ export function DfdEditorFrame({
         onSave?.(data.xml);
       } else if (data.event === "dfd-selection") {
         onSelectionChange(resolveSelection(data, graph));
+      } else if (data.event === "dfd-escape") {
+        onEscape?.();
       }
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [graph, mode, onSave, onSelectionChange]);
+  }, [graph, mode, onSave, onSelectionChange, onEscape]);
 
   // embedUrl's clibs param (edit mode only) needs an absolute origin — see
   // its own comment. That's a browser-only value, so the src is built after

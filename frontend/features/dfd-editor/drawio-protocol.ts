@@ -14,7 +14,11 @@ export type DrawioEvent =
    *  dfdKind/id attributes read off the selected mxGraph cell; null for no
    *  selection, multi-select, or a cell with no dfdKind (trust boundary,
    *  freehand shape). */
-  | { event: "dfd-selection"; kind: "node" | "edge" | null; id: string | null };
+  | { event: "dfd-selection"; kind: "node" | "edge" | null; id: string | null }
+  /** Escape pressed while focus was inside the editor — also from our own
+   *  bridge, so the parent can close a full-screen view the iframe has
+   *  keyboard focus in. */
+  | { event: "dfd-escape" };
 
 export function parseDrawioMessage(raw: unknown): DrawioEvent | null {
   try {
