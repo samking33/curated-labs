@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { checkDfdReferences, compileToDrawioXml, extractFromDrawioXml } from "./dfd-xml";
 import { dfdGraphSchema } from "./schemas/dfd";
 import type { DfdGraph } from "./schemas/dfd";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 const graph: DfdGraph = {
@@ -445,9 +445,13 @@ describe("dfdGraphSchema cross-namespace id collisions", () => {
   });
 });
 
-describe("extractFromDrawioXml against every curated seed DFD", () => {
-  const labsDir = path.resolve(__dirname, "../../backend/prisma/seed/labs");
-  const files = readdirSync(labsDir).filter((f) => f.endsWith(".json"));
+// The seeds live in the backend package, which is not checked out alongside
+// this one in every repository. Skip rather than fail when they are absent.
+const labsDir = path.resolve(__dirname, "../../backend/prisma/seed/labs");
+const seedsPresent = existsSync(labsDir);
+
+describe.skipIf(!seedsPresent)("extractFromDrawioXml against every curated seed DFD", () => {
+  const files = seedsPresent ? readdirSync(labsDir).filter((f) => f.endsWith(".json")) : [];
 
   it.each(files)("round-trips %s without losing referential integrity", (file) => {
     const seed = JSON.parse(readFileSync(path.join(labsDir, file), "utf-8"));
