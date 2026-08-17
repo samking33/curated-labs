@@ -1,0 +1,350 @@
+{
+  "category": {
+    "name": "AI Security",
+    "slug": "ai-security",
+    "description": "Threat modeling systems that embed models: prompt handling, training data, tool access and output trust.",
+    "sortOrder": 4
+  },
+  "lab": {
+    "title": "Internal RAG Knowledge Assistant",
+    "slug": "rag-assistant",
+    "summary": "A retrieval-augmented assistant that answers staff questions from internal documents — and can call internal tools.",
+    "businessContext": "A company wants staff to ask questions in plain language instead of searching a sprawling wiki. The assistant indexes internal documents, including HR and finance material with different audiences, and can look up records through an internal API.",
+    "systemContext": "Staff ask a question in a chat UI. An orchestrator embeds the query, retrieves matching chunks from a vector store built by an ingestion job, and sends the question plus retrieved text to a hosted LLM. The orchestrator can also call an internal records API when the model asks for a lookup.",
+    "difficulty": "advanced",
+    "estimatedMinutes": 45,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "staff",
+        "type": "external_entity",
+        "label": "Staff User",
+        "description": "Asks questions through the chat UI",
+        "trustBoundary": "corporate",
+        "assets": ["question", "session"],
+        "metadata": {}
+      },
+      {
+        "id": "llm",
+        "type": "third_party",
+        "label": "Hosted LLM",
+        "description": "External model provider that receives prompts and returns completions",
+        "trustBoundary": "internet",
+        "assets": ["prompt", "completion"],
+        "metadata": {}
+      },
+      {
+        "id": "orchestrator",
+        "type": "process",
+        "label": "RAG Orchestrator",
+        "description": "Builds the prompt, retrieves context, and executes tool calls the model requests",
+        "trustBoundary": "platform",
+        "assets": ["prompt", "document_chunk"],
+        "metadata": {}
+      },
+      {
+        "id": "vector_store",
+        "type": "data_store",
+        "label": "Vector Store",
+        "description": "Embedded chunks of internal documents, searched per query",
+        "trustBoundary": "platform",
+        "assets": ["document_chunk", "embedding"],
+        "metadata": {}
+      },
+      {
+        "id": "ingestion",
+        "type": "process",
+        "label": "Ingestion Job",
+        "description": "Crawls document sources and writes embeddings",
+        "trustBoundary": "platform",
+        "assets": ["document"],
+        "metadata": {}
+      },
+      {
+        "id": "doc_sources",
+        "type": "data_store",
+        "label": "Document Sources",
+        "description": "Wiki, HR and finance repositories with mixed audiences",
+        "trustBoundary": "corporate",
+        "assets": ["hr_record", "finance_document", "wiki_page"],
+        "metadata": {}
+      },
+      {
+        "id": "records_api",
+        "type": "service",
+        "label": "Internal Records API",
+        "description": "Tool the assistant can call to look up employee and customer records",
+        "trustBoundary": "platform",
+        "assets": ["employee_record", "customer_record"],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-staff-orch",
+        "source": "staff",
+        "target": "orchestrator",
+        "label": "Ask question",
+        "protocol": "HTTPS",
+        "data": ["question"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-orch-vector",
+        "source": "orchestrator",
+        "target": "vector_store",
+        "label": "Retrieve chunks",
+        "protocol": "HTTPS",
+        "data": ["embedding", "document_chunk"],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-orch-llm",
+        "source": "orchestrator",
+        "target": "llm",
+        "label": "Send prompt with context",
+        "protocol": "HTTPS",
+        "data": ["prompt", "document_chunk"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-llm-orch",
+        "source": "llm",
+        "target": "orchestrator",
+        "label": "Completion and tool calls",
+        "protocol": "HTTPS",
+        "data": ["completion"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-orch-records",
+        "source": "orchestrator",
+        "target": "records_api",
+        "label": "Execute tool lookup",
+        "protocol": "HTTPS",
+        "data": ["employee_record", "customer_record"],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-docs-ingest",
+        "source": "doc_sources",
+        "target": "ingestion",
+        "label": "Crawl documents",
+        "protocol": "HTTPS",
+        "data": ["document"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-ingest-vector",
+        "source": "ingestion",
+        "target": "vector_store",
+        "label": "Write embeddings",
+        "protocol": "HTTPS",
+        "data": ["embedding"],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      { "id": "internet", "label": "Internet", "description": "The external model provider. Everything sent there leaves the company.", "metadata": {} },
+      { "id": "corporate", "label": "Corporate", "description": "Staff and the document repositories they already have varying access to.", "metadata": {} },
+      { "id": "platform", "label": "Assistant Platform", "description": "The retrieval, orchestration and tool-calling plane.", "metadata": {} }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "no-per-user-acl",
+      "title": "Retrieval ignores who is asking",
+      "description": "The vector store is searched without reference to the asker's permissions, so a chunk from a document the user could never open is as retrievable as any other.",
+      "affectedNodeIds": ["vector_store", "orchestrator"],
+      "affectedEdgeIds": ["e-orch-vector"],
+      "hint": "Two people ask the same question. Should they get the same chunks back?"
+    },
+    {
+      "key": "model-output-drives-tools",
+      "title": "Model output is executed as an instruction",
+      "description": "Whatever the model returns as a tool call is executed against the records API, so the model's output is trusted to decide what internal data gets read.",
+      "affectedNodeIds": ["llm", "orchestrator", "records_api"],
+      "affectedEdgeIds": ["e-llm-orch", "e-orch-records"],
+      "hint": "The model is outside your trust boundary. What is it allowed to make happen inside?"
+    },
+    {
+      "key": "unfiltered-ingestion",
+      "title": "Ingestion indexes whatever it crawls",
+      "description": "No classification or exclusion is applied during ingestion, so restricted material is embedded alongside general documentation with nothing marking the difference.",
+      "affectedNodeIds": ["doc_sources", "ingestion", "vector_store"],
+      "affectedEdgeIds": ["e-docs-ingest", "e-ingest-vector"],
+      "hint": "Everything in those repositories becomes searchable by everyone. Is that what was intended?"
+    },
+    {
+      "key": "context-leaves-org",
+      "title": "Retrieved internal text is sent to a third party",
+      "description": "Document chunks are placed in the prompt and transmitted to an external provider on every query, with no stated agreement about retention or training use.",
+      "affectedNodeIds": ["orchestrator", "llm"],
+      "affectedEdgeIds": ["e-orch-llm"],
+      "hint": "Follow the internal document text along the arrows. Where does it end up?"
+    },
+    {
+      "key": "no-tool-scoping",
+      "title": "The tool is broader than any single question needs",
+      "description": "The records API exposes employee and customer lookups generally, rather than the narrow query the assistant actually needs to answer.",
+      "affectedNodeIds": ["records_api"],
+      "affectedEdgeIds": ["e-orch-records"],
+      "hint": "What is the most damaging thing that tool could be asked to do?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "indirect-prompt-injection",
+      "title": "Instructions hidden in an indexed document hijack the assistant",
+      "description": "An attacker plants text in a document the crawler indexes. When that chunk is retrieved, the model reads it as instructions and follows them — including asking for tool calls the user never requested.",
+      "category": "AI model abuse",
+      "expectedPriority": "critical",
+      "affectedNodeIds": ["doc_sources", "vector_store", "llm"],
+      "affectedEdgeIds": ["e-docs-ingest", "e-orch-llm"],
+      "acceptedAliases": [
+        "indirect prompt injection",
+        "poisoned document",
+        "instructions in retrieved content",
+        "RAG injection",
+        "malicious content in the knowledge base"
+      ],
+      "learnerExplanation": "Retrieved content is untrusted input, even when it comes from inside the company."
+    },
+    {
+      "key": "retrieval-acl-bypass",
+      "title": "Answers reveal documents the asker cannot open",
+      "description": "Because retrieval ignores permissions, a general question surfaces chunks of restricted HR or finance material and the model summarises them back to any member of staff.",
+      "category": "Information disclosure",
+      "expectedPriority": "critical",
+      "affectedNodeIds": ["vector_store", "orchestrator"],
+      "affectedEdgeIds": ["e-orch-vector"],
+      "acceptedAliases": [
+        "permission bypass through retrieval",
+        "leaks restricted documents",
+        "no access control on chunks",
+        "reads HR data it should not"
+      ],
+      "learnerExplanation": "An assistant that ignores permissions becomes the easiest way to read what you are not allowed to read."
+    },
+    {
+      "key": "tool-call-abuse",
+      "title": "Injected instructions drive an internal tool call",
+      "description": "A hijacked model asks the orchestrator to look up records unrelated to the question, and the orchestrator executes it because tool calls are trusted by construction.",
+      "category": "Elevation of privilege",
+      "expectedPriority": "critical",
+      "affectedNodeIds": ["orchestrator", "records_api"],
+      "affectedEdgeIds": ["e-llm-orch", "e-orch-records"],
+      "acceptedAliases": [
+        "confused deputy",
+        "unauthorised tool invocation",
+        "model triggers API calls",
+        "agent abuses its tools"
+      ],
+      "learnerExplanation": "Giving a model tools turns a text problem into an access-control problem."
+    },
+    {
+      "key": "context-retention",
+      "title": "Internal documents retained by the model provider",
+      "description": "Confidential text is sent to a third party on every query. Without a contractual and technical bar on retention and training use, it has effectively left the company's control.",
+      "category": "Privacy violation",
+      "expectedPriority": "high",
+      "affectedNodeIds": ["llm"],
+      "affectedEdgeIds": ["e-orch-llm"],
+      "acceptedAliases": [
+        "data sent to third party model",
+        "provider trains on our data",
+        "confidential text leaves the org",
+        "vendor retention"
+      ],
+      "learnerExplanation": "Whatever goes in the prompt has left your boundary, whatever the marketing page says."
+    },
+    {
+      "key": "embedding-inversion",
+      "title": "Stored embeddings disclose their source text",
+      "description": "The vector store holds embeddings of confidential documents. Read access to it allows reconstruction of a meaningful amount of the original content.",
+      "category": "Information disclosure",
+      "expectedPriority": "medium",
+      "affectedNodeIds": ["vector_store"],
+      "affectedEdgeIds": [],
+      "acceptedAliases": [
+        "embedding inversion",
+        "reconstruct text from vectors",
+        "vector store is sensitive",
+        "embeddings leak content"
+      ],
+      "learnerExplanation": "An embedding is a lossy encoding of the text, not an anonymisation of it."
+    },
+    {
+      "key": "unbounded-query-cost",
+      "title": "Query volume drives unbounded third-party cost",
+      "description": "Each question triggers embedding and completion calls with no per-user ceiling, so a script — or an accident — turns into a large bill and provider throttling for everyone.",
+      "category": "Denial of service",
+      "expectedPriority": "medium",
+      "affectedNodeIds": ["orchestrator", "llm"],
+      "affectedEdgeIds": ["e-orch-llm"],
+      "acceptedAliases": [
+        "cost exhaustion",
+        "no rate limiting",
+        "denial of wallet",
+        "spam the assistant"
+      ],
+      "learnerExplanation": "When each request costs money, availability and budget are the same control."
+    },
+    {
+      "key": "stale-permissions",
+      "title": "Index keeps content after access is revoked",
+      "description": "A document withdrawn or reclassified at source stays embedded in the vector store until the next crawl, so revocation does not take effect where it matters.",
+      "category": "Security misconfiguration",
+      "expectedPriority": "medium",
+      "affectedNodeIds": ["ingestion", "vector_store"],
+      "affectedEdgeIds": ["e-ingest-vector"],
+      "acceptedAliases": [
+        "stale index",
+        "deleted document still searchable",
+        "revocation does not propagate",
+        "out of date embeddings"
+      ],
+      "learnerExplanation": "A copy you forgot about is a copy you cannot revoke."
+    }
+  ],
+  "mitigations": [
+    { "key": "acl-aware-retrieval", "title": "Filter retrieval by the asker's permissions", "description": "Store the source document's access control with each chunk and filter at query time, so retrieval can only return what that user could already open." },
+    { "key": "treat-context-untrusted", "title": "Mark retrieved content as data, never instructions", "description": "Wrap retrieved chunks in explicit delimiters, instruct the model that they are reference material only, and reject output that echoes the instruction block." },
+    { "key": "tool-allowlist-confirm", "title": "Constrain and confirm tool calls", "description": "Allow only a narrow set of parameterised lookups, validate arguments against the asking user's own permissions, and require confirmation for anything that reads another person's records." },
+    { "key": "no-retention-agreement", "title": "Contractual and technical bar on retention", "description": "Use an endpoint with zero-retention and no-training terms, or self-host, so prompt content is not kept by the provider." },
+    { "key": "classify-at-ingest", "title": "Classify and exclude at ingestion", "description": "Decide what may be indexed before embedding it, and keep restricted material out of the shared index entirely." },
+    { "key": "encrypt-vector-store", "title": "Protect the vector store as confidential data", "description": "Encrypt it, restrict access to the orchestrator's identity, and treat a read of it as equivalent to a read of the source documents." },
+    { "key": "per-user-quotas", "title": "Per-user rate and cost limits", "description": "Cap queries per user per period and alert on spikes, so one caller cannot exhaust the budget or the provider quota." },
+    { "key": "reindex-on-change", "title": "Propagate deletions and reclassification", "description": "Drive re-indexing from source change events so withdrawing a document removes its chunks promptly." }
+  ],
+  "threatMitigations": [
+    { "threatKey": "indirect-prompt-injection", "mitigationKey": "treat-context-untrusted", "isPrimary": true, "explanation": "The fix is refusing to let retrieved text act as instructions, not trying to detect every malicious phrasing." },
+    { "threatKey": "retrieval-acl-bypass", "mitigationKey": "acl-aware-retrieval", "isPrimary": true, "explanation": "Permission filtering has to happen during retrieval; asking the model to be discreet is not access control." },
+    { "threatKey": "tool-call-abuse", "mitigationKey": "tool-allowlist-confirm", "isPrimary": true, "explanation": "Authorising the tool call against the human's own permissions is what stops a hijacked model reaching further than the user could." },
+    { "threatKey": "context-retention", "mitigationKey": "no-retention-agreement", "isPrimary": true, "explanation": "Once text is sent, only the provider's retention terms and configuration decide what happens to it." },
+    { "threatKey": "embedding-inversion", "mitigationKey": "encrypt-vector-store", "isPrimary": true, "explanation": "The store deserves the same protection as the documents it was derived from." },
+    { "threatKey": "unbounded-query-cost", "mitigationKey": "per-user-quotas", "isPrimary": true, "explanation": "A per-caller ceiling is what turns an expensive incident into a throttled one." },
+    { "threatKey": "stale-permissions", "mitigationKey": "reindex-on-change", "isPrimary": true, "explanation": "Revocation only counts if it reaches every copy, including the derived ones." },
+    { "threatKey": "indirect-prompt-injection", "mitigationKey": "classify-at-ingest", "isPrimary": false, "explanation": "Indexing less hostile surface reduces where an injection can be planted in the first place." }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "do_not_ship",
+    "rationale": "Two critical issues compound rather than sit side by side: retrieval ignores permissions, and model output is executed as tool calls. Either alone is serious; together, a single planted document turns the assistant into a general-purpose reader of internal records on behalf of any member of staff, and the resulting access looks like normal assistant traffic in the logs. Permission-aware retrieval and authorising tool calls against the human's own access are not tuning, they are the security model, and the system does not have one until they exist. Arguing for 'ship with conditions' is defensible only for a closed pilot on a deliberately non-sensitive corpus with tool calling switched off.",
+    "suggestedConditions": [
+      "Filter retrieval by the asking user's permissions before any pilot with real documents.",
+      "Authorise every tool call against the human's own access, not the model's request.",
+      "Confirm zero-retention and no-training terms with the model provider, in writing.",
+      "Exclude restricted HR and finance material from the index until per-document access control is in place."
+    ]
+  }
+}

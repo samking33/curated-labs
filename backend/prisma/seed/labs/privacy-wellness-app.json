@@ -1,0 +1,343 @@
+{
+  "category": {
+    "name": "Privacy",
+    "slug": "privacy",
+    "description": "Data protection by design: lawful basis, minimisation, retention, third-party sharing and subject rights.",
+    "sortOrder": 2
+  },
+  "lab": {
+    "title": "Employee Wellness App",
+    "slug": "wellness-app",
+    "summary": "A voluntary wellness app collecting health data from staff, with dashboards for managers and an analytics SDK.",
+    "businessContext": "An employer offers a wellness programme: staff opt in, log activity and mood, and sync a fitness tracker. HR wants engagement reporting, and managers want team dashboards. Participation is described as voluntary, and the employer is the one asking.",
+    "systemContext": "A mobile app writes activity and mood entries to a wellness API, which stores them in a member database. A tracker vendor pushes heart-rate and sleep data by webhook. A third-party analytics SDK in the app reports usage events. HR and managers view dashboards built from the same store.",
+    "difficulty": "intermediate",
+    "estimatedMinutes": 40,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "employee",
+        "type": "external_entity",
+        "label": "Employee",
+        "description": "Logs activity and mood through the mobile app",
+        "trustBoundary": "internet",
+        "assets": ["health_data", "mood_entry", "identity"],
+        "metadata": {}
+      },
+      {
+        "id": "tracker_vendor",
+        "type": "third_party",
+        "label": "Fitness Tracker Vendor",
+        "description": "Pushes heart-rate and sleep data by webhook",
+        "trustBoundary": "internet",
+        "assets": ["heart_rate", "sleep_data"],
+        "metadata": {}
+      },
+      {
+        "id": "analytics_sdk",
+        "type": "third_party",
+        "label": "Analytics SDK",
+        "description": "Embedded in the app, reports usage events to its own vendor",
+        "trustBoundary": "internet",
+        "assets": ["usage_event", "device_id"],
+        "metadata": {}
+      },
+      {
+        "id": "wellness_api",
+        "type": "process",
+        "label": "Wellness API",
+        "description": "Accepts entries and serves dashboards",
+        "trustBoundary": "platform",
+        "assets": ["health_data", "identity"],
+        "metadata": {}
+      },
+      {
+        "id": "member_db",
+        "type": "data_store",
+        "label": "Member Database",
+        "description": "Identified health and mood history, retained indefinitely",
+        "trustBoundary": "platform",
+        "assets": ["health_data", "mood_entry", "identity"],
+        "metadata": {}
+      },
+      {
+        "id": "manager_dash",
+        "type": "service",
+        "label": "Manager Dashboard",
+        "description": "Team-level engagement and wellness views",
+        "trustBoundary": "employer",
+        "assets": ["aggregate", "health_data"],
+        "metadata": {}
+      },
+      {
+        "id": "hr_admin",
+        "type": "external_entity",
+        "label": "HR Administrator",
+        "description": "Runs programme reporting",
+        "trustBoundary": "employer",
+        "assets": ["report"],
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-emp-api",
+        "source": "employee",
+        "target": "wellness_api",
+        "label": "Log activity and mood",
+        "protocol": "HTTPS",
+        "data": ["health_data", "mood_entry"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-emp-sdk",
+        "source": "employee",
+        "target": "analytics_sdk",
+        "label": "In-app usage events",
+        "protocol": "HTTPS",
+        "data": ["usage_event", "device_id"],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-tracker-api",
+        "source": "tracker_vendor",
+        "target": "wellness_api",
+        "label": "Push biometric webhook",
+        "protocol": "HTTPS",
+        "data": ["heart_rate", "sleep_data"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-api-db",
+        "source": "wellness_api",
+        "target": "member_db",
+        "label": "Store entries",
+        "protocol": "TLS",
+        "data": ["health_data", "identity"],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-db-dash",
+        "source": "member_db",
+        "target": "manager_dash",
+        "label": "Team wellness view",
+        "protocol": "HTTPS",
+        "data": ["health_data", "aggregate"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-dash-hr",
+        "source": "manager_dash",
+        "target": "hr_admin",
+        "label": "Programme reporting",
+        "protocol": "HTTPS",
+        "data": ["report"],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      { "id": "internet", "label": "Internet", "description": "Employees on personal devices, the tracker vendor, and the analytics vendor.", "metadata": {} },
+      { "id": "platform", "label": "Wellness Platform", "description": "The API and the identified health record store.", "metadata": {} },
+      { "id": "employer", "label": "Employer", "description": "HR and line managers — the party with power over the data subjects.", "metadata": {} }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "manager-sees-identified",
+      "title": "Managers can see identified health data",
+      "description": "The dashboard reads from the identified member store rather than an aggregate, so a line manager can see an individual's wellness and mood history.",
+      "affectedNodeIds": ["member_db", "manager_dash"],
+      "affectedEdgeIds": ["e-db-dash"],
+      "hint": "Who is on each side of that arrow, and what is the relationship between them?"
+    },
+    {
+      "key": "no-retention-limit",
+      "title": "Health history kept indefinitely",
+      "description": "No retention period is stated, so entries persist after someone leaves the programme or the company.",
+      "affectedNodeIds": ["member_db"],
+      "affectedEdgeIds": [],
+      "hint": "How long should a mood entry from four years ago still exist?"
+    },
+    {
+      "key": "sdk-in-health-app",
+      "title": "Third-party SDK inside a health application",
+      "description": "An analytics SDK runs in the same app as health logging and reports to its own vendor, outside the described data flows.",
+      "affectedNodeIds": ["analytics_sdk"],
+      "affectedEdgeIds": ["e-emp-sdk"],
+      "hint": "That arrow leaves for a vendor nobody mentioned in the programme description. What does it carry?"
+    },
+    {
+      "key": "consent-under-pressure",
+      "title": "Consent is sought by the employer",
+      "description": "Participation is called voluntary, but the employer holds power over the data subject and can see engagement, which undermines whether consent can be freely given.",
+      "affectedNodeIds": ["employee", "hr_admin"],
+      "affectedEdgeIds": ["e-emp-api"],
+      "hint": "Can someone realistically decline, and would anyone notice if they did?"
+    },
+    {
+      "key": "unauthenticated-webhook",
+      "title": "Biometric webhook accepted without stated verification",
+      "description": "The tracker vendor pushes data inbound with no described signature check, so the API cannot distinguish real biometric data from forged submissions.",
+      "affectedNodeIds": ["tracker_vendor", "wellness_api"],
+      "affectedEdgeIds": ["e-tracker-api"],
+      "hint": "What proves that webhook actually came from the vendor?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "manager-surveillance",
+      "title": "Wellness data used to judge individuals",
+      "description": "A manager reads an individual's mood and activity history and it informs how that person is treated at work. The system permits it by design, so nothing about the access looks anomalous.",
+      "category": "Privacy violation",
+      "expectedPriority": "critical",
+      "affectedNodeIds": ["manager_dash", "member_db"],
+      "affectedEdgeIds": ["e-db-dash"],
+      "acceptedAliases": [
+        "employee surveillance",
+        "manager sees individual health",
+        "used for performance decisions",
+        "no aggregation before managers"
+      ],
+      "learnerExplanation": "Health data flowing to someone with power over the subject is a privacy harm even when every component behaves correctly."
+    },
+    {
+      "key": "special-category-no-basis",
+      "title": "Special-category data processed without a sound lawful basis",
+      "description": "Health data carries a higher bar, and employer-sought consent is difficult to treat as freely given. Collection may have no valid basis at all.",
+      "category": "Privacy violation",
+      "expectedPriority": "critical",
+      "affectedNodeIds": ["employee", "wellness_api"],
+      "affectedEdgeIds": ["e-emp-api"],
+      "acceptedAliases": [
+        "invalid consent",
+        "no lawful basis",
+        "coerced consent",
+        "special category data",
+        "GDPR article 9",
+        "DPDPA consent"
+      ],
+      "learnerExplanation": "Consent obtained by the party who signs your payslip is the textbook example of consent that is not freely given."
+    },
+    {
+      "key": "sdk-exfiltration",
+      "title": "Analytics SDK leaks health context to its vendor",
+      "description": "Screen names, event labels and device identifiers reach the analytics vendor. Even without a single health value, \"opened Anxiety Check-in\" plus a stable device id discloses health information.",
+      "category": "Privacy violation",
+      "expectedPriority": "high",
+      "affectedNodeIds": ["analytics_sdk"],
+      "affectedEdgeIds": ["e-emp-sdk"],
+      "acceptedAliases": [
+        "third party SDK tracking",
+        "analytics leaks health",
+        "screen names reveal condition",
+        "device id sharing"
+      ],
+      "learnerExplanation": "Metadata about health is health data; the inference is what matters, not the field name."
+    },
+    {
+      "key": "indefinite-retention",
+      "title": "Data outlives the relationship",
+      "description": "With no retention rule, health history remains after someone leaves the programme or the employer, extending exposure for years with no purpose.",
+      "category": "Privacy violation",
+      "expectedPriority": "high",
+      "affectedNodeIds": ["member_db"],
+      "affectedEdgeIds": [],
+      "acceptedAliases": [
+        "no deletion policy",
+        "keeps data forever",
+        "retention period missing",
+        "data after leaving"
+      ],
+      "learnerExplanation": "Every extra month of retention is extra breach impact bought for nothing."
+    },
+    {
+      "key": "forged-biometrics",
+      "title": "Forged biometric submissions accepted",
+      "description": "Without signature verification, anyone who learns the endpoint can post fabricated heart-rate or sleep data against another member's account.",
+      "category": "Spoofing",
+      "expectedPriority": "high",
+      "affectedNodeIds": ["tracker_vendor", "wellness_api"],
+      "affectedEdgeIds": ["e-tracker-api"],
+      "acceptedAliases": [
+        "unsigned webhook",
+        "fake tracker data",
+        "spoofed vendor callback",
+        "no webhook verification"
+      ],
+      "learnerExplanation": "An inbound callback from a third party is untrusted input until something proves otherwise."
+    },
+    {
+      "key": "no-subject-rights",
+      "title": "No route to access, export or delete",
+      "description": "Nothing in the design lets a member see what is held, export it, or have it erased, so statutory subject rights cannot be honoured within the required window.",
+      "category": "Privacy violation",
+      "expectedPriority": "medium",
+      "affectedNodeIds": ["wellness_api", "member_db"],
+      "affectedEdgeIds": [],
+      "acceptedAliases": [
+        "no DSAR support",
+        "cannot delete my data",
+        "no export",
+        "right to erasure missing",
+        "data principal rights"
+      ],
+      "learnerExplanation": "If honouring a deletion request means an engineer writing SQL, the process will not survive contact with volume."
+    },
+    {
+      "key": "breach-impact",
+      "title": "A single database compromise exposes identified health records",
+      "description": "Identity and health data sit together with no separation or field-level protection, so one credential turns into a reportable special-category breach.",
+      "category": "Information disclosure",
+      "expectedPriority": "high",
+      "affectedNodeIds": ["member_db"],
+      "affectedEdgeIds": ["e-api-db"],
+      "acceptedAliases": [
+        "database breach",
+        "health records exposed",
+        "no encryption of sensitive fields",
+        "identity and health stored together"
+      ],
+      "learnerExplanation": "Concentrating identified health data raises the cost of any single failure."
+    }
+  ],
+  "mitigations": [
+    { "key": "aggregate-only-dashboards", "title": "Aggregate-only reporting with a minimum cohort size", "description": "Serve managers and HR from a pre-aggregated view that suppresses any group small enough to identify an individual." },
+    { "key": "independent-processor", "title": "Run the programme through an independent processor", "description": "Have a third party hold identified data under contract, returning only aggregates to the employer, so the employer never holds individual health records." },
+    { "key": "remove-analytics-sdk", "title": "Remove the third-party SDK from health screens", "description": "Drop the SDK or replace it with first-party telemetry that never leaves the platform and carries no health-revealing screen names." },
+    { "key": "retention-schedule", "title": "Defined retention with automatic deletion", "description": "Set a purpose-bound retention period, delete on programme exit or departure, and run erasure as a scheduled job rather than a manual task." },
+    { "key": "verify-webhook", "title": "Verify webhook signatures with replay protection", "description": "Require a signed payload from the tracker vendor and reject anything unsigned, mismatched or replayed." },
+    { "key": "subject-rights-endpoints", "title": "Build access, export and erasure into the product", "description": "Give members a self-service route to see, export and delete their data, and make erasure propagate to every derived store." },
+    { "key": "separate-and-encrypt", "title": "Separate identity from health data and encrypt it", "description": "Hold health entries against a pseudonymous key with the mapping stored separately, and encrypt health fields at rest." },
+    { "key": "dpia-and-basis", "title": "Complete a DPIA and settle the lawful basis", "description": "Assess the processing before launch, document the basis, and design participation so declining carries no visible consequence." }
+  ],
+  "threatMitigations": [
+    { "threatKey": "manager-surveillance", "mitigationKey": "aggregate-only-dashboards", "isPrimary": true, "explanation": "If the dashboard cannot express an individual, the harm has no route through it." },
+    { "threatKey": "manager-surveillance", "mitigationKey": "independent-processor", "isPrimary": false, "explanation": "Keeping identified records outside the employer removes the temptation and the capability together." },
+    { "threatKey": "special-category-no-basis", "mitigationKey": "dpia-and-basis", "isPrimary": true, "explanation": "The basis has to be settled before collection starts; it is not something to retrofit." },
+    { "threatKey": "sdk-exfiltration", "mitigationKey": "remove-analytics-sdk", "isPrimary": true, "explanation": "The only reliable control over a third-party SDK in a health app is not shipping it." },
+    { "threatKey": "indefinite-retention", "mitigationKey": "retention-schedule", "isPrimary": true, "explanation": "Automatic deletion is what makes a retention policy real rather than aspirational." },
+    { "threatKey": "forged-biometrics", "mitigationKey": "verify-webhook", "isPrimary": true, "explanation": "Signature verification is what separates the vendor's data from anyone else's." },
+    { "threatKey": "no-subject-rights", "mitigationKey": "subject-rights-endpoints", "isPrimary": true, "explanation": "Rights that depend on a manual engineering task do not hold up at volume." },
+    { "threatKey": "breach-impact", "mitigationKey": "separate-and-encrypt", "isPrimary": true, "explanation": "Separation and encryption decide how bad a single compromise turns out to be." }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "do_not_ship",
+    "rationale": "The blocking problems here are not implementation defects — the system does what it was designed to do, and what it was designed to do is route identified health data to line managers on a basis that probably is not valid. Both critical findings are design decisions, so no amount of hardening addresses them; aggregate-only reporting and a settled lawful basis change what the product is. The remaining items (analytics SDK, retention, unsigned webhook) are ordinary engineering work and would be reasonable launch conditions on their own. Arguing for 'ship with conditions' is defensible only if the manager dashboard is removed from the initial release entirely.",
+    "suggestedConditions": [
+      "Remove individual-level views from manager and HR dashboards; serve aggregates with a minimum cohort size.",
+      "Complete a DPIA and settle the lawful basis before any data is collected.",
+      "Remove the third-party analytics SDK from health screens.",
+      "Define and automate a retention period, including deletion on programme exit.",
+      "Verify tracker webhook signatures before accepting biometric data."
+    ]
+  }
+}

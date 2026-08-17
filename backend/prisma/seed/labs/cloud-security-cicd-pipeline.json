@@ -1,0 +1,342 @@
+{
+  "category": {
+    "name": "Cloud Security",
+    "slug": "cloud-security",
+    "description": "Infrastructure threat modeling: identity, network boundaries, secrets, supply chain and blast radius.",
+    "sortOrder": 3
+  },
+  "lab": {
+    "title": "CI/CD Deployment Pipeline",
+    "slug": "cicd-pipeline",
+    "summary": "A build pipeline that pulls public dependencies, signs nothing, and deploys straight to production.",
+    "businessContext": "A SaaS team ships several times a day. Their pipeline has grown organically and now holds production credentials, but no one has threat modeled the pipeline itself — only the product it deploys.",
+    "systemContext": "A push to the Git host triggers a build runner. The runner installs dependencies from a public package registry, reads deployment credentials from a secrets manager, pushes an image to a container registry, and deploys it into the production cluster.",
+    "difficulty": "advanced",
+    "estimatedMinutes": 45,
+    "version": 1
+  },
+  "dfd": {
+    "version": "1.0",
+    "nodes": [
+      {
+        "id": "developer",
+        "type": "external_entity",
+        "label": "Developer",
+        "description": "Pushes commits and opens pull requests",
+        "trustBoundary": "internet",
+        "assets": ["source_code", "credentials"],
+        "metadata": {}
+      },
+      {
+        "id": "registry_public",
+        "type": "third_party",
+        "label": "Public Package Registry",
+        "description": "Third-party dependency source, resolved at build time",
+        "trustBoundary": "internet",
+        "assets": ["dependency"],
+        "metadata": {}
+      },
+      {
+        "id": "git_host",
+        "type": "service",
+        "label": "Git Host",
+        "description": "Hosts the repository and triggers builds on push",
+        "trustBoundary": "ci",
+        "assets": ["source_code", "webhook"],
+        "metadata": {}
+      },
+      {
+        "id": "runner",
+        "type": "process",
+        "label": "Build Runner",
+        "description": "Executes the build, tests and packaging steps",
+        "trustBoundary": "ci",
+        "assets": ["source_code", "dependency", "deploy_credentials"],
+        "provider": "aws",
+        "metadata": {}
+      },
+      {
+        "id": "secrets",
+        "type": "data_store",
+        "label": "Secrets Manager",
+        "description": "Holds the production deployment credentials",
+        "trustBoundary": "ci",
+        "assets": ["deploy_credentials"],
+        "provider": "aws",
+        "metadata": {}
+      },
+      {
+        "id": "image_registry",
+        "type": "data_store",
+        "label": "Container Registry",
+        "description": "Stores built images consumed by production",
+        "trustBoundary": "ci",
+        "assets": ["container_image"],
+        "provider": "aws",
+        "metadata": {}
+      },
+      {
+        "id": "prod_cluster",
+        "type": "service",
+        "label": "Production Cluster",
+        "description": "Runs whatever image the pipeline hands it",
+        "trustBoundary": "production",
+        "assets": ["customer_data", "container_image"],
+        "provider": "aws",
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-dev-git",
+        "source": "developer",
+        "target": "git_host",
+        "label": "Push commit",
+        "protocol": "HTTPS",
+        "data": ["source_code"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-git-runner",
+        "source": "git_host",
+        "target": "runner",
+        "label": "Trigger build",
+        "protocol": "webhook",
+        "data": ["source_code"],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-registry-runner",
+        "source": "registry_public",
+        "target": "runner",
+        "label": "Install dependencies",
+        "protocol": "HTTPS",
+        "data": ["dependency"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      },
+      {
+        "id": "e-secrets-runner",
+        "source": "secrets",
+        "target": "runner",
+        "label": "Read deploy credentials",
+        "protocol": "HTTPS",
+        "data": ["deploy_credentials"],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-runner-image",
+        "source": "runner",
+        "target": "image_registry",
+        "label": "Push image",
+        "protocol": "HTTPS",
+        "data": ["container_image"],
+        "trustBoundaryCrossing": false,
+        "metadata": {}
+      },
+      {
+        "id": "e-image-prod",
+        "source": "image_registry",
+        "target": "prod_cluster",
+        "label": "Pull and deploy image",
+        "protocol": "HTTPS",
+        "data": ["container_image"],
+        "trustBoundaryCrossing": true,
+        "metadata": {}
+      }
+    ],
+    "trustBoundaries": [
+      { "id": "internet", "label": "Internet", "description": "Untrusted: developers on laptops and the public dependency ecosystem.", "metadata": {} },
+      { "id": "ci", "label": "CI / Build", "description": "The build plane. Holds production credentials but is reachable from every commit.", "metadata": {} },
+      { "id": "production", "label": "Production", "description": "Customer-facing runtime and customer data.", "metadata": {} }
+    ]
+  },
+  "architectureIssues": [
+    {
+      "key": "no-image-signing",
+      "title": "Nothing verifies what production runs",
+      "description": "The cluster pulls whatever tag the registry serves. There is no signature or provenance check, so the only thing standing between an attacker and production is write access to the registry.",
+      "affectedNodeIds": ["image_registry", "prod_cluster"],
+      "affectedEdgeIds": ["e-image-prod"],
+      "hint": "If someone replaced the image behind that tag, what in this diagram would notice?"
+    },
+    {
+      "key": "unpinned-dependencies",
+      "title": "Dependencies resolved from a public registry at build time",
+      "description": "Every build reaches out to a third party and executes whatever it gets back, including install scripts, inside a runner holding production credentials.",
+      "affectedNodeIds": ["registry_public", "runner"],
+      "affectedEdgeIds": ["e-registry-runner"],
+      "hint": "The build runs third-party code. What else is in reach of that code?"
+    },
+    {
+      "key": "standing-prod-credentials",
+      "title": "Production credentials sit in the build plane",
+      "description": "The runner can read long-lived deployment credentials on any build, so compromise of any build is compromise of production.",
+      "affectedNodeIds": ["secrets", "runner"],
+      "affectedEdgeIds": ["e-secrets-runner"],
+      "hint": "Which builds actually need to deploy? Do all of them get the same access?"
+    },
+    {
+      "key": "no-branch-protection",
+      "title": "Any push can start a privileged build",
+      "description": "The trigger is a push event with no distinction between a trusted branch and an untrusted contribution, so the pipeline treats all code as equally trusted.",
+      "affectedNodeIds": ["git_host", "runner"],
+      "affectedEdgeIds": ["e-dev-git", "e-git-runner"],
+      "hint": "Does a pull request from outside the team run with the same permissions as a merge to main?"
+    },
+    {
+      "key": "no-build-isolation",
+      "title": "Builds share a runner with no isolation stated",
+      "description": "Nothing in the design says builds are isolated from each other, so artefacts, caches or credentials from one build may be reachable by the next.",
+      "affectedNodeIds": ["runner"],
+      "affectedEdgeIds": [],
+      "hint": "What is left behind on the runner after a build finishes?"
+    }
+  ],
+  "threats": [
+    {
+      "key": "dependency-confusion",
+      "title": "Malicious dependency executes inside the build",
+      "description": "An attacker publishes a package that the resolver picks up — a typo-squat, a compromised maintainer account, or an internal name claimed publicly. Its install script runs on the runner with the runner's full access.",
+      "category": "Supply chain risk",
+      "expectedPriority": "critical",
+      "affectedNodeIds": ["registry_public", "runner"],
+      "affectedEdgeIds": ["e-registry-runner"],
+      "acceptedAliases": [
+        "typosquatting",
+        "malicious npm package",
+        "compromised dependency",
+        "dependency confusion",
+        "poisoned package"
+      ],
+      "learnerExplanation": "A build that installs third-party code is executing third-party code, with everything the build can reach."
+    },
+    {
+      "key": "credential-exfiltration",
+      "title": "Deployment credentials stolen from the runner",
+      "description": "Any code executing during the build — a dependency, a test, a build script — can read the deployment credentials the runner fetched and send them somewhere the attacker controls.",
+      "category": "Information disclosure",
+      "expectedPriority": "critical",
+      "affectedNodeIds": ["secrets", "runner"],
+      "affectedEdgeIds": ["e-secrets-runner"],
+      "acceptedAliases": [
+        "secret leakage",
+        "stolen deploy keys",
+        "credential theft from CI",
+        "exfiltrate secrets"
+      ],
+      "learnerExplanation": "Secrets available to the build are available to anything the build runs."
+    },
+    {
+      "key": "image-tampering",
+      "title": "Unsigned image swapped before deployment",
+      "description": "With write access to the registry and no signature verification, an attacker replaces the image behind a tag. Production pulls it and runs it as a normal deployment.",
+      "category": "Tampering",
+      "expectedPriority": "critical",
+      "affectedNodeIds": ["image_registry", "prod_cluster"],
+      "affectedEdgeIds": ["e-image-prod"],
+      "acceptedAliases": [
+        "image substitution",
+        "registry poisoning",
+        "unsigned artifact",
+        "swap the container image"
+      ],
+      "learnerExplanation": "Without provenance, \"the image in the registry\" and \"the image we built\" are two different claims."
+    },
+    {
+      "key": "pr-triggered-build",
+      "title": "Untrusted pull request runs with production access",
+      "description": "A fork or outside contribution triggers the same privileged pipeline, letting attacker-authored build steps run against the secrets manager.",
+      "category": "Elevation of privilege",
+      "expectedPriority": "high",
+      "affectedNodeIds": ["git_host", "runner"],
+      "affectedEdgeIds": ["e-dev-git", "e-git-runner"],
+      "acceptedAliases": [
+        "pwn request",
+        "fork pull request attack",
+        "untrusted PR gets secrets",
+        "malicious pull request"
+      ],
+      "learnerExplanation": "The trigger decides who gets to run code in your build plane."
+    },
+    {
+      "key": "no-audit-trail",
+      "title": "Deployments cannot be attributed afterwards",
+      "description": "No described record links a running image back to a commit, a build and an approver, so an unauthorised deployment cannot be distinguished from a legitimate one after the fact.",
+      "category": "Repudiation",
+      "expectedPriority": "medium",
+      "affectedNodeIds": ["runner", "prod_cluster"],
+      "affectedEdgeIds": ["e-image-prod"],
+      "acceptedAliases": [
+        "no provenance",
+        "cannot trace deployment",
+        "missing audit log",
+        "no deployment history"
+      ],
+      "learnerExplanation": "If you cannot say which commit is in production, you cannot say whether you have been compromised."
+    },
+    {
+      "key": "cache-poisoning",
+      "title": "One build poisons the next through shared state",
+      "description": "With no stated isolation, a compromised build writes to a shared dependency cache or workspace, and a later legitimate build picks it up.",
+      "category": "Insecure design",
+      "expectedPriority": "high",
+      "affectedNodeIds": ["runner"],
+      "affectedEdgeIds": [],
+      "acceptedAliases": [
+        "shared cache attack",
+        "build cache poisoning",
+        "runner reuse",
+        "cross build contamination"
+      ],
+      "learnerExplanation": "State that survives a build is state an attacker can leave behind."
+    },
+    {
+      "key": "overbroad-cluster-perms",
+      "title": "Pipeline identity can do more than deploy",
+      "description": "The credential the pipeline uses is scoped to the cluster rather than to a single deployment, so stealing it grants far more than shipping one service.",
+      "category": "Identity and access management failure",
+      "expectedPriority": "high",
+      "affectedNodeIds": ["secrets", "prod_cluster"],
+      "affectedEdgeIds": ["e-image-prod"],
+      "acceptedAliases": [
+        "excessive IAM permissions",
+        "over-privileged service account",
+        "wildcard permissions",
+        "too much access"
+      ],
+      "learnerExplanation": "Blast radius is set by what the stolen identity can do, not by how it was stolen."
+    }
+  ],
+  "mitigations": [
+    { "key": "lockfile-and-mirror", "title": "Pin dependencies and resolve through an internal mirror", "description": "Commit a lockfile with integrity hashes and resolve through a controlled proxy, so a build cannot silently pull a new or substituted package." },
+    { "key": "oidc-short-lived", "title": "Short-lived deployment identity via OIDC", "description": "Replace stored long-lived credentials with a token minted per build, scoped to that workflow and expiring in minutes." },
+    { "key": "sign-and-verify", "title": "Sign images and verify signatures at admission", "description": "Sign every artefact at build time and have the cluster refuse to run anything without a valid signature from the expected pipeline." },
+    { "key": "restrict-triggers", "title": "Separate untrusted-contribution builds from privileged ones", "description": "Run pull-request builds in a workflow with no access to secrets, and require approval before any privileged pipeline runs." },
+    { "key": "ephemeral-runners", "title": "Ephemeral, isolated runners", "description": "Give every build a fresh runner destroyed afterwards, so nothing persists from one build into the next." },
+    { "key": "provenance-log", "title": "Record build provenance", "description": "Emit a signed attestation linking image to commit, builder and inputs, and keep it queryable so any running image can be traced back." },
+    { "key": "least-privilege-deploy", "title": "Scope the deploy identity to one workload", "description": "Grant only the permissions needed to update the single service, so a stolen identity cannot take the cluster." }
+  ],
+  "threatMitigations": [
+    { "threatKey": "dependency-confusion", "mitigationKey": "lockfile-and-mirror", "isPrimary": true, "explanation": "Pinned, hash-verified resolution through a controlled mirror is what stops a substituted package entering the build." },
+    { "threatKey": "credential-exfiltration", "mitigationKey": "oidc-short-lived", "isPrimary": true, "explanation": "A token that expires in minutes and is scoped to one workflow is worth far less to steal than a standing credential." },
+    { "threatKey": "image-tampering", "mitigationKey": "sign-and-verify", "isPrimary": true, "explanation": "Verification at admission is what makes a swapped image fail to run rather than deploy normally." },
+    { "threatKey": "pr-triggered-build", "mitigationKey": "restrict-triggers", "isPrimary": true, "explanation": "Untrusted code should never run in a workflow that can reach production secrets." },
+    { "threatKey": "cache-poisoning", "mitigationKey": "ephemeral-runners", "isPrimary": true, "explanation": "Nothing survives the build, so there is nothing for a compromised build to leave behind." },
+    { "threatKey": "no-audit-trail", "mitigationKey": "provenance-log", "isPrimary": true, "explanation": "Signed provenance is what lets you answer \"what is actually running, and where did it come from\"." },
+    { "threatKey": "overbroad-cluster-perms", "mitigationKey": "least-privilege-deploy", "isPrimary": true, "explanation": "Scoping the identity limits what a successful theft actually buys." }
+  ],
+  "releaseGuidance": {
+    "recommendedDecision": "do_not_ship",
+    "rationale": "Three independent paths — a malicious dependency, a stolen standing credential, or an unsigned image swap — each end in attacker code running in production, and none of them require a privileged position to start. A pipeline in this shape is not a service with some findings against it; it is the control plane for everything the company ships. Holding until signing, short-lived credentials and trigger separation are in place is the defensible call. Arguing for 'ship with conditions' is reasonable if the pipeline is not yet handling real customer traffic and the three critical items are genuinely days away.",
+    "suggestedConditions": [
+      "Replace standing deployment credentials with short-lived, per-build identity before the next production deploy.",
+      "Require signature verification at admission so unsigned images cannot run.",
+      "Split pull-request builds into a workflow with no access to secrets.",
+      "Pin dependencies with integrity hashes and resolve through an internal mirror."
+    ]
+  }
+}
