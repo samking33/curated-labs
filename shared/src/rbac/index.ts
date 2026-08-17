@@ -1,5 +1,5 @@
 /**
- * The permission matrix from PROJECT.md §6, as executable data.
+ * The permission matrix from PROJECT.md, as executable data.
  *
  * This is the single source of truth for both sides: the API enforces it, the
  * web app uses it to decide what to render. It is data rather than scattered
@@ -36,7 +36,7 @@ export type Permission = (typeof PERMISSIONS)[number];
 /**
  * "limited" in the spec's table means: allowed, but only inside departments
  * where the user holds manager scope. The permission is granted here and the
- * department filter is applied by the caller — see `managedDepartmentIds`.
+ * department filter is applied by the caller: see `managedDepartmentIds`.
  */
 export type Grant = "yes" | "limited";
 

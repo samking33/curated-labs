@@ -13,7 +13,7 @@ export type AuditEvent = {
 };
 
 /**
- * Append-only trail for the sensitive actions in §17. Kept separate from the
+ * Append-only trail for the sensitive actions. Kept separate from the
  * records it describes so editing an org cannot rewrite its own history.
  */
 @Injectable()
@@ -38,7 +38,7 @@ export class AuditService {
       });
     } catch (err) {
       // Never fail the user's action because the audit write failed, but make
-      // the gap loud — a silently missing trail is worse than a noisy log.
+      // the gap loud: a silently missing trail is worse than a noisy log.
       this.logger.error({ err, action: event.action }, "audit write failed");
     }
   }

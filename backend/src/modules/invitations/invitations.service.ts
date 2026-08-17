@@ -5,7 +5,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import type { AuthContext } from "../../common/guards/session.guard";
 
 /**
- * Organization invitations (§17).
+ * Organization invitations.
  *
  * Only the SHA-256 of the token is stored, so the database cannot be used to
  * mint working invitation links. The plaintext is returned exactly once, at
@@ -41,7 +41,7 @@ export class InvitationsService {
     if (!canInDepartment(ctx, "invitation:write", input.departmentId)) {
       throw new ForbiddenException("You can only invite into departments you manage.");
     }
-    // Nobody may invite at a role above their own — that is privilege escalation
+    // Nobody may invite at a role above their own: that is privilege escalation
     // by proxy. Owners are the only ones who can mint another owner.
     if (input.role === "org_owner" && ctx.orgRole !== "org_owner" && !ctx.platformRoles.includes("platform_owner")) {
       throw new ForbiddenException("Only an organization owner can invite another owner.");

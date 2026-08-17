@@ -96,7 +96,7 @@ export class PlaygroundGenerationService {
     const orgId = user.organizations[0]?.id ?? null;
 
     const job = await this.prisma.$transaction(async (tx) => {
-      // Serialises this user's quota check against itself — closes the
+      // Serialises this user's quota check against itself: closes the
       // read-then-insert race a plain COUNT would leave open between two
       // concurrent requests.
       // ponytail: per-user advisory lock only. Org ceiling is 5x the user
@@ -106,7 +106,7 @@ export class PlaygroundGenerationService {
 
       const since = new Date(Date.now() - this.config.PLAYGROUND_QUOTA_WINDOW_HOURS * 3_600_000);
       // A `failed` job still cost one NIM call, but charging a learner for the
-      // validator's strictness is user-hostile — it does not count against quota.
+      // validator's strictness is user-hostile: it does not count against quota.
       const window = { createdAt: { gte: since }, status: { not: "failed" as const } };
 
       const mine = await tx.playgroundGenerationJob.count({ where: { ...window, userId: user.userId } });
@@ -133,7 +133,7 @@ export class PlaygroundGenerationService {
       });
     });
 
-    // ponytail: in-process fire-and-forget — no queue exists (docs/redis-later.md).
+    // ponytail: in-process fire-and-forget, no queue exists (docs/redis-later.md).
     // A restart mid-generation strands a `running` row; jobStatus() reaps it.
     // Upgrade path: BullMQ once Redis exists, same job row as the record.
     void this.runJob(job.id, body.difficulty).catch((err) =>
@@ -167,7 +167,7 @@ export class PlaygroundGenerationService {
   /**
    * The validation pipeline: validate everything, write nothing until it all
    * passes (mirrors backend/prisma/seed/seed.ts). One generate + one repair
-   * attempt, per PLAYGROUND_PROJECT.md — never more.
+   * attempt, per PLAYGROUND_PROJECT.md: never more.
    */
   private async runJob(jobId: string, difficulty?: GenerateScenarioRequest["difficulty"]) {
     const job = await this.prisma.playgroundGenerationJob.update({
@@ -191,7 +191,7 @@ export class PlaygroundGenerationService {
 
       const errors = validateGeneratedScenario(draft, AUTHOR_SENTINEL);
       if (errors.length) {
-        // Logged, never returned — these are error strings about the model's
+        // Logged, never returned: these are error strings about the model's
         // own draft, not something safe to hand back to the learner verbatim.
         this.logger.warn({ jobId, errors }, "generated scenario rejected validation");
         priorErrors = errors;
@@ -213,7 +213,7 @@ export class PlaygroundGenerationService {
   }
 
   /** Mints real UUIDs for every author key, builds the persisted content, and
-   *  inserts scenario + flips the job to succeeded — all in one transaction. */
+   *  inserts scenario + flips the job to succeeded: all in one transaction. */
   private async persist(
     job: { id: string; sessionId: string; userId: string; organizationId: string | null },
     draft: PlaygroundScenarioDraft,
@@ -223,7 +223,7 @@ export class PlaygroundGenerationService {
     const threatId = new Map(draft.threats.map((t) => [t.key, randomUUID()]));
     const mitigationId = new Map(draft.mitigations.map((m) => [m.key, randomUUID()]));
 
-    // Author keys are discarded here — the learner-facing submission schemas
+    // Author keys are discarded here: the learner-facing submission schemas
     // require z.string().uuid(), so downstream code speaks the same id
     // dialect as a curated lab regardless of how this scenario was authored.
     const dfdXml = compileToDrawioXml(draft.dfd);
@@ -352,7 +352,7 @@ export class PlaygroundGenerationService {
 
   /**
    * Server-only. Parses `content_json` back through the schema on every
-   * read — the column is JSONB and a bad row must fail here, not inside a
+   * read: the column is JSONB and a bad row must fail here, not inside a
    * grading loop. Ownership is optional: `PlaygroundAttemptsService` already
    * checked it via the attempt row before ever reaching a scenario id.
    */
@@ -366,7 +366,7 @@ export class PlaygroundGenerationService {
   }
 
   /** Owner-only. Re-validates that every threat/architecture-issue reference
-   *  still resolves before accepting the edit — the same referential-integrity
+   *  still resolves before accepting the edit: the same referential-integrity
    *  bar validateGeneratedScenario applies at generation time, re-applied here
    *  because the learner can now change the DFD after generation. */
   async updateScenarioDfd(user: AuthContext, scenarioId: string, drawioXml: string): Promise<void> {
@@ -398,7 +398,7 @@ export class PlaygroundGenerationService {
       throw new BadRequestException(`That edit removes something a threat or issue still points at: ${errors[0]}`);
     }
 
-    // Prisma field is `dfdXml` on this model (LabDfd's is `drawioXml` — the two
+    // Prisma field is `dfdXml` on this model (LabDfd's is `drawioXml`: the two
     // models were named independently in Task 5; don't cross the names).
     await this.prisma.playgroundGeneratedScenario.update({ where: { id: scenarioId }, data: { dfdXml: drawioXml } });
   }

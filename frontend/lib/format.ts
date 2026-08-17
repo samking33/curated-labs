@@ -1,6 +1,6 @@
 /**
  * Both arguments must be frozen values (already-computed Dates, not fresh
- * `Date.now()` reads) — passing a live clock read here from a client component
+ * `Date.now()` reads): passing a live clock read here from a client component
  * is exactly what causes hydration mismatches: the server and the browser
  * render this function microseconds-to-seconds apart, and a live read would
  * make each side may compute a different bucket ("2 minutes ago" vs

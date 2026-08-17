@@ -75,9 +75,7 @@ export function AiAssistantCard({
             </svg>
           </IconButton>
         )}
-        {/* Was a diagonal "expand" glyph that promised to enlarge this card —
-            it actually navigated away to Progress. A small chart icon matches
-            where the click really goes. */}
+        {/* A chart icon, because this navigates to Progress rather than expanding. */}
         <IconButton label="Open progress" onClick={onOpenProgress}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
             <path
@@ -231,7 +229,7 @@ function Bubble({ turn }: { turn: Turn }) {
     <div style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start" }}>
       {turn.degraded && (
         <span style={{ fontSize: tokens.size.xs, color: tokens.color.warning, marginBottom: 2 }}>
-          Coach unavailable — not a real answer
+          Coach unavailable, not a real answer
         </span>
       )}
       <p
@@ -248,7 +246,7 @@ function Bubble({ turn }: { turn: Turn }) {
           fontSize: tokens.size.base,
           lineHeight: 1.5,
           whiteSpace: "pre-wrap",
-          // Model prose is rendered as plain text, never as HTML (§19).
+          // Model prose is rendered as plain text, never as HTML.
           wordBreak: "break-word",
         }}
       >

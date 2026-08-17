@@ -34,14 +34,11 @@ if (backendEnv.ALLOW_DEV_LOGIN === "true" && backendEnv.NODE_ENV === "production
 /*
  * Cap the backend's thread pools.
  *
- * Prisma's Rust engine sizes its tokio worker pool from the CPU count, and
- * the production host reports 64 CPUs while the account gets a far smaller
- * share of tasks. Measured there: the backend alone held 74 of ~114
- * available tasks, the engine aborted outright ("Aborted (core dumped)")
- * because it could not build that pool, and nothing on the account could
- * fork afterwards (`spawn EAGAIN`) — which is what kept taking the whole
- * site down. With these two caps the same backend starts in 12 threads and
- * serves normally; verified directly on the host, both ways.
+ * Prisma's Rust engine sizes its tokio worker pool from the CPU count. A
+ * shared host advertises far more CPUs than the account has task slots for,
+ * so the engine tries to build a pool it cannot have, aborts, and leaves
+ * nothing on the account able to fork (`spawn EAGAIN`). Capped, the same
+ * backend runs in about a dozen threads.
  *
  * Set here rather than in the app because libuv reads UV_THREADPOOL_SIZE
  * once at process start, so it has to be in the child's environment. Both
@@ -54,9 +51,8 @@ backendEnv.UV_THREADPOOL_SIZE = backendEnv.UV_THREADPOOL_SIZE || "2";
  * This file only ever runs on the hosted, public deployment, so it is the
  * honest place to say so. The backend keys Secure cookies, HSTS and error
  * redaction off this rather than NODE_ENV, because the dev-login workaround
- * above forces NODE_ENV=development — which had silently turned all three
- * off on a public HTTPS site (observed live: a 500 response carrying
- * absolute server paths and query text).
+ * above forces NODE_ENV=development, which would otherwise disable all three
+ * on a public HTTPS site.
  */
 backendEnv.PUBLIC_DEPLOYMENT = "true";
 
@@ -82,14 +78,14 @@ let shuttingDown = false;
 function scheduleRestart(reason, startedAt) {
   if (shuttingDown) return;
   // A process that ran a while before dying is a fresh fault, not a boot
-  // loop — don't let an old streak inflate its backoff.
+  // loop, so an old streak cannot inflate its backoff.
   if (Date.now() - startedAt > STABLE_MS) restarts = 0;
   const delay = Math.min(RESTART_BASE_MS * 2 ** restarts, RESTART_MAX_MS);
   restarts += 1;
-  console.error(`backend ${reason} — restarting in ${delay}ms (attempt ${restarts})`);
+  console.error(`backend ${reason}, restarting in ${delay}ms (attempt ${restarts})`);
   // Deliberately NOT unref'd: until Next is listening there is nothing else
   // holding the event loop open, so an unref'd timer here lets the whole
-  // supervisor exit the moment the backend dies during startup — the exact
+  // supervisor exit the moment the backend dies during startup: the exact
   // outage this is meant to prevent.
   setTimeout(startBackend, delay);
 }
@@ -118,12 +114,10 @@ function startBackend() {
   backend = child;
 
   /*
-   * An unhandled "error" event on a ChildProcess THROWS, which would kill
-   * this supervisor and take the site down with it — the exact outage it
-   * exists to prevent. Seen in production as `spawn ... EAGAIN`: the shared
-   * host refused to fork because the account was at its process limit, the
-   * error event went unhandled, and the whole app died. A failed spawn is
-   * just another reason to back off and retry.
+   * An unhandled "error" event on a ChildProcess throws, which would kill
+   * this supervisor and take the site down with it: the exact outage it
+   * exists to prevent. A spawn that fails because the host is out of process
+   * slots is just another reason to back off and retry.
    */
   child.on("error", (err) => settle(`failed to spawn (${err.code || err.message})`));
   child.on("exit", (code) => settle(`exited (${code})`));
@@ -137,7 +131,7 @@ startBackend();
  * The timeout is the important half: Next only calls listen() after this
  * resolves, and that listen() is the single thing Passenger watches to
  * decide the app is up. Waiting forever for a backend that keeps panicking
- * therefore took the entire site down — including every page that needs no
+ * therefore took the entire site down, including every page that needs no
  * database at all. Starting Next anyway degrades the API only.
  */
 function waitForBackend(timeoutMs) {
@@ -160,7 +154,7 @@ function waitForBackend(timeoutMs) {
 // competing with Next's own CPU-heavy startup, which is what provoked the
 // panic in the first place.
 waitForBackend(60_000).then((healthy) => {
-  if (!healthy) console.error("backend not healthy yet — starting frontend anyway so the site serves");
+  if (!healthy) console.error("backend not healthy yet, starting frontend anyway so the site serves");
 
   const next = require(path.join(__dirname, "frontend/node_modules/next"));
   const app = next({ dev: false, dir: path.join(__dirname, "frontend") });
@@ -175,7 +169,7 @@ waitForBackend(60_000).then((healthy) => {
     })
     .catch((err) => {
       // Next failing to prepare is not recoverable by retrying here, and
-      // without it there is nothing to serve — let Passenger restart us.
+      // without it there is nothing to serve, so let Passenger restart us.
       console.error("next failed to prepare", err);
       process.exit(1);
     });
@@ -190,13 +184,11 @@ process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
 /*
- * A child does not die with its parent on POSIX. Whenever this supervisor
- * went away without killing it — an uncaught throw, Passenger tearing the
- * app down — the backend was left orphaned still holding the internal port,
- * so the next boot's backend could not bind and the app never recovered.
- * Seen live with a backend from a previous version still running hours
- * later. "exit" covers every path that unwinds normally; SIGKILL cannot be
- * trapped by anything, here or elsewhere.
+ * A child does not die with its parent on POSIX. If this supervisor goes
+ * away without killing it, through an uncaught throw or the host tearing the
+ * app down, the backend is orphaned still holding the internal port, and the
+ * next boot cannot bind. "exit" covers every path that unwinds normally;
+ * SIGKILL cannot be trapped by anything, here or elsewhere.
  */
 process.on("exit", () => {
   shuttingDown = true;

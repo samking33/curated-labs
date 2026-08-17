@@ -10,7 +10,7 @@ const TUCKED_KEY = "securacy:buddy-tucked";
 /**
  * Routes that already embed the coach in the page itself. Mounting the
  * floating one there too put two chat windows onto a single screen, talking
- * to the same endpoint — reported as "I have 3 places on the same page to
+ * to the same endpoint: reported as "I have 3 places on the same page to
  * talk to AI Assistant or Coach".
  */
 const ROUTES_WITH_INLINE_COACH = ["/app/dashboard"];
@@ -25,7 +25,7 @@ const PROMPTS = [
  * The coach peeking in from the right edge.
  *
  * Deliberately restrained: it slides in once after a delay, offers help, and
- * takes "no" for an answer — declining tucks it to a small edge handle for the
+ * takes "no" for an answer: declining tucks it to a small edge handle for the
  * rest of the session, so it stops asking but stays one click away. A mascot
  * that re-nags is the fastest way to make people hate a product; one that
  * vanishes for good takes the feature with it.
@@ -38,7 +38,7 @@ export function CoachBuddy() {
   /**
    * "Not now" tucks the character away rather than deleting it. It used to
    * unmount entirely, which left no way back to the coach for the rest of the
-   * session — declining one offer of help should not cost you the feature.
+   * session: declining one offer of help should not cost you the feature.
    */
   const [tucked, setTucked] = useState(true); // assume tucked until checked
   const [ready, setReady] = useState(false);
@@ -111,7 +111,7 @@ export function CoachBuddy() {
   // Nothing renders until sessionStorage has been read, so the character
   // cannot flash in and out on first paint.
   if (!ready) return null;
-  // The page already has the coach inline — one per screen.
+  // The page already has the coach inline: one per screen.
   if (ROUTES_WITH_INLINE_COACH.some((r) => pathname?.startsWith(r))) return null;
 
   // Tucked: a small handle stays clipped to the edge. One click brings it back.
@@ -164,7 +164,7 @@ export function CoachBuddy() {
           alignItems: "flex-end",
           gap: 4,
           // Tucked off-screen until it peeks, and leaning in further on hover.
-          // Peeking means part of the BODY is off-screen, not half the face —
+          // Peeking means part of the BODY is off-screen, not half the face,
           // the expression is the whole point of the character.
           transform: peeking
             ? `translateX(${hovered || open ? -10 : 14}px)`
@@ -371,7 +371,7 @@ function MiniChat({
       >
         {chat.turns.length === 0 && (
           <p style={{ margin: 0, fontSize: tokens.size.sm, color: tokens.color.textMuted, lineHeight: 1.55 }}>
-            Ask me about a step you&apos;re stuck on, or threat modeling in general — I know which
+            Ask me about a step you&apos;re stuck on, or threat modeling in general. I know which
             lab or scenario you&apos;re on, not the specific diagram or your answers.
           </p>
         )}
@@ -379,7 +379,7 @@ function MiniChat({
           <div key={i} style={{ justifySelf: t.role === "user" ? "end" : "start", maxWidth: "88%" }}>
             {t.degraded && (
               <div style={{ fontSize: tokens.size.xs, color: tokens.color.warning, marginBottom: 2 }}>
-                Coach unavailable — not a real answer
+                Coach unavailable, not a real answer
               </div>
             )}
             <p

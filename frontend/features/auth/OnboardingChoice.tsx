@@ -7,7 +7,7 @@ import { tokens } from "@/lib/tokens";
 
 type Mode = "choose" | "organization" | "invite";
 
-/** §2 step 2. Three paths: solo, create an org, or redeem an invitation. */
+/** step 2. Three paths: solo, create an org, or redeem an invitation. */
 export function OnboardingChoice() {
   const [mode, setMode] = useState<Mode>("choose");
   const [name, setName] = useState("");
@@ -31,7 +31,7 @@ export function OnboardingChoice() {
   return (
     <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: tokens.color.bg, color: tokens.color.text, padding: tokens.space(6) }}>
       <div style={{ maxWidth: 460, width: "100%" }}>
-        <h1 style={{ fontSize: tokens.size.xxl, marginBottom: tokens.space(2) }}>How will you use Curated Labs?</h1>
+        <h1 style={{ fontSize: tokens.size.xxl, marginBottom: tokens.space(2) }}>How will you use Securacy?</h1>
         <p style={{ color: tokens.color.textMuted, marginBottom: tokens.space(5) }}>
           You can join an organization later.
         </p>

@@ -7,7 +7,7 @@ import { serverApi } from "@/lib/server-api";
 import { tokens } from "@/lib/tokens";
 import { TopNavServer } from "@/features/dashboard/TopNavServer";
 
-export const metadata = { title: "Progress — Securacy" };
+export const metadata = { title: "Progress · Securacy" };
 
 const STEP_LABEL: Record<string, string> = {
   intro: "Brief",

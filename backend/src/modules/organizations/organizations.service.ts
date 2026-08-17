@@ -4,11 +4,11 @@ import { PrismaService } from "../prisma/prisma.service";
 import type { AuthContext } from "../../common/guards/session.guard";
 
 /**
- * Organizations, departments and memberships (§17).
+ * Organizations, departments and memberships.
  *
  * Every method resolves the caller's real role from the database before acting.
  * An organizationId in the URL is treated as a claim to verify, never as proof
- * of membership (§13).
+ * of membership.
  */
 @Injectable()
 export class OrganizationsService {

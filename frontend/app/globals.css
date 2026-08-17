@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 /**
- * Global surface only. Everything else reads from lib/tokens.ts — §16 requires
- * design tokens stay centralized so the product owner's visual identity can be
+ * Global surface only. Everything else reads from lib/tokens.ts, keeping
+ * design tokens centralized so the product owner's visual identity can be
  * dropped in without touching feature code.
  *
  * These mirror tokens.color.{bg,text,accent}; keep the two in step.
@@ -27,25 +27,38 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Visible keyboard focus everywhere — §16 accessibility baseline. */
+/*
+ * The lab workspace is a two-column split: diagram left, the step's work right.
+ * The right column needs 380px to be usable, which does not fit beside the
+ * diagram on a tablet or phone, so below that the two stack instead.
+ */
+.lab-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(380px, 1fr);
+}
+
+@media (max-width: 900px) {
+  .lab-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Visible keyboard focus everywhere. */
 :focus-visible {
   outline: 2px solid var(--cl-accent);
   outline-offset: 2px;
 }
 
 /*
- * Universal press/hover feedback.
+ * Universal press and hover feedback.
  *
- * Every button and link in this app is a one-off inline-styled element (§16 —
- * feature code reads tokens.ts, nothing globally ever set `:active` or a
- * transition), so nothing depressed on click and clicking felt inert while a
- * route change loaded in silence. This is one rule instead of editing every
- * call site: inline `style` objects never set `transform`, so a global
- * `:active` scale-down layers on top of all of them for free.
+ * Every button and link here is styled inline from tokens.ts, so there is no
+ * shared class to hang `:active` on. Inline styles never set `transform`,
+ * which lets one global rule give all of them a press response instead of
+ * editing every call site.
  *
- * `[role="button"]` picks up the handful of non-<button> clickable elements
- * (e.g. the DFD segment picks in WeeklyProgressCard) that already carry that
- * role for accessibility.
+ * `[role="button"]` covers the non-<button> clickable elements that already
+ * carry that role for accessibility.
  */
 button,
 a[href],

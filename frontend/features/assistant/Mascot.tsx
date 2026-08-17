@@ -12,7 +12,7 @@ export type Mood = "idle" | "curious" | "happy" | "thinking";
  * this size and avoids shipping a WebGL runtime plus a rigged asset for one
  * decorative element.
  *
- * What makes it feel alive is behaviour, not polygons — the pupils track the
+ * What makes it feel alive is behaviour, not polygons: the pupils track the
  * cursor, it blinks on its own schedule, and the brows, mouth and lean all
  * shift with mood.
  */
@@ -30,7 +30,7 @@ export function Mascot({
   const [blink, setBlink] = useState(false);
   const [pupil, setPupil] = useState({ x: 0, y: 0 });
 
-  // Irregular blink timing — a metronome reads as a machine.
+  // Irregular blink timing: a metronome reads as a machine.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const schedule = () => {

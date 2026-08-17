@@ -7,7 +7,7 @@ import { serverApi } from "@/lib/server-api";
 import { tokens } from "@/lib/tokens";
 import { TopNavServer } from "@/features/dashboard/TopNavServer";
 
-export const metadata = { title: "Practice — Securacy" };
+export const metadata = { title: "Practice · Securacy" };
 
 /**
  * Everything not yet finished, newest first. "Learn" is for browsing the

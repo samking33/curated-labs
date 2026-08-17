@@ -3,8 +3,8 @@ import { z } from "zod";
 /**
  * Gamification (points + leaderboard).
  *
- * Added at the user's explicit direction, overriding PROJECT.md §1's "Do Not
- * Build: marks, grades, leaderboards" — flagged before building, decision was
+ * Added at the user's explicit direction, overriding PROJECT.md's "Do Not
+ * Build: marks, grades, leaderboards": flagged before building, decision was
  * to build the full public version anyway. Points reward the same signals the
  * coach already computes deterministically (matched threats, correct
  * priorities, correct mitigation pairs); nothing here changes what the AI
@@ -25,8 +25,8 @@ export const pointReasonSchema = z.enum(POINT_REASONS);
 export type PointReason = z.infer<typeof pointReasonSchema>;
 
 /**
- * Point values. Weighted toward step 4 (mitigations), the only step §8 allows
- * to be explicitly right/wrong — steps 1 and 5 pay a flat participation amount
+ * Point values. Weighted toward step 4 (mitigations), the only step allows
+ * to be explicitly right/wrong: steps 1 and 5 pay a flat participation amount
  * since there is no correctness signal to reward there without inventing one
  * the AI doesn't actually compute.
  */

@@ -11,8 +11,8 @@ import { useEffect, useRef } from "react";
  * A single 2D context redraws the whole field well inside frame budget.
  *
  * Behaviour:
- *  - Idle    — slow drift, tight ring.
- *  - Listening — the ring breathes and ripples, amplitude driven by `level`.
+ *  - Idle   : slow drift, tight ring.
+ *  - Listening: the ring breathes and ripples, amplitude driven by `level`.
  *  - The loop pauses when the tab is hidden and never starts when the user has
  *    asked for reduced motion.
  */
@@ -52,7 +52,7 @@ function sampleRamp(t: number): string {
   return `${mix(0)},${mix(1)},${mix(2)}`;
 }
 
-/** Cheap deterministic value noise — no dependency, stable across renders. */
+/** Cheap deterministic value noise: no dependency, stable across renders. */
 function hash(n: number): number {
   const x = Math.sin(n * 127.1) * 43758.5453;
   return x - Math.floor(x);
@@ -87,7 +87,7 @@ export function VoiceField({
   count?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Read through refs so changing `listening` never restarts the animation —
+  // Read through refs so changing `listening` never restarts the animation,
   // the field eases between states instead of snapping.
   const listeningRef = useRef(listening);
   listeningRef.current = listening;
@@ -144,7 +144,7 @@ export function VoiceField({
         const alpha = 0.05 + rim * (0.55 + 0.4 * energy);
 
         // Tint sweeps around the ring, with per-particle scatter to avoid hard
-        // banding. Named `ramp`, not `t` — `t` is the animation clock here.
+        // banding. Named `ramp`, not `t`: `t` is the animation clock here.
         //
         // The exponent biases the distribution toward the green end: the logo is
         // predominantly green with the cool stops as accents on the shackle, and

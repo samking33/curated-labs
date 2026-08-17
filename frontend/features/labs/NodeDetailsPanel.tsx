@@ -12,7 +12,7 @@ const tagStyle = {
   color: tokens.color.textMuted,
 };
 
-/** Shows what's currently selected in the DFD — separate from RefPicker
+/** Shows what's currently selected in the DFD: separate from RefPicker
  *  (which turns a selection into an attached answer reference on specific
  *  steps); this is a general "what is this" box available on every step. */
 export function NodeDetailsPanel({ selection }: { selection: DfdSelection }) {

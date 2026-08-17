@@ -13,7 +13,7 @@ import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { PlaygroundAttemptsService } from "./playground-attempts.service";
 
 /** Separate URL namespace from the curated /attempts routes, not an overload
- *  of :attemptId — overloading would mean probing two tables on every submit
+ *  of :attemptId, since overloading would mean probing two tables on every submit
  *  and an ambiguous 404, to save one prop on the frontend. */
 @Controller("playground")
 export class PlaygroundAttemptsController {

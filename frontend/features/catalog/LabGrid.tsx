@@ -8,7 +8,7 @@ export function LabGrid({
   emptyLabel = "No labs published yet.",
 }: {
   labs: LabSummary[];
-  /** Playground: "/app/playground" — scenarios have no slug routing, so `lab.slug` is the scenario id. */
+  /** Playground passes "/app/playground". Scenarios have no slug routing, so `lab.slug` is the scenario id. */
   hrefBase?: string;
   emptyLabel?: string;
 }) {
@@ -43,7 +43,7 @@ export function LabGrid({
             <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm, lineHeight: 1.5, margin: 0 }}>{lab.summary}</p>
             {lab.attempt && (
               <div style={{ marginTop: tokens.space(3), fontSize: tokens.size.sm, color: lab.attempt.status === "completed" ? tokens.color.success : tokens.color.accent }}>
-                {lab.attempt.status === "completed" ? "✓ Completed" : `Resume — ${lab.attempt.currentStep.replace(/_/g, " ")}`}
+                {lab.attempt.status === "completed" ? "✓ Completed" : `Resume: ${lab.attempt.currentStep.replace(/_/g, " ")}`}
               </div>
             )}
           </Link>

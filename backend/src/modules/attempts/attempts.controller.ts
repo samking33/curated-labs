@@ -14,7 +14,7 @@ import { AttemptsService } from "./attempts.service";
 
 /**
  * Step submissions accept an Idempotency-Key so a retried POST after a network
- * blip returns the original result instead of re-running the AI call (§25).
+ * blip returns the original result instead of re-running the AI call.
  */
 @Controller()
 export class AttemptsController {

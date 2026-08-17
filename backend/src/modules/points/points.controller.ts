@@ -18,7 +18,7 @@ export class PointsController {
   }
 
   /**
-   * Open to any member, not just admins — a peer leaderboard is motivational,
+   * Open to any member, not just admins: a peer leaderboard is motivational,
    * a different concern from the org-oversight routes that gate on
    * `progress:view_org`. Still requires membership: an org's ranking is not
    * meant to be readable by outsiders even though the global board is.

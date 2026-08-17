@@ -5,10 +5,10 @@ import { getMe } from "@/lib/session";
 import { tokens } from "@/lib/tokens";
 import { TopNavServer } from "@/features/dashboard/TopNavServer";
 
-export const metadata = { title: "Live Classes — Securacy" };
+export const metadata = { title: "Live Classes · Securacy" };
 
 /**
- * Live sessions are not part of this build (PROJECT.md §1 scopes it to curated
+ * Live sessions are not part of this build (PROJECT.md scopes it to curated
  * labs). The route exists so the nav item is honest rather than a dead link.
  */
 export default async function LivePage() {

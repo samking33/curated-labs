@@ -1,7 +1,7 @@
 import { SCENARIO_BOUNDS, THREAT_CATEGORIES, type GenerateScenarioRequest } from "@curated-labs/shared";
 
 /**
- * Versioned prompt registry (§14, §19).
+ * Versioned prompt registry.
  *
  * Every prompt is kept in source control and stamped with a version that is
  * written to `ai_calls.prompt_version`, so a change in coaching behaviour can
@@ -151,8 +151,8 @@ export type PromptKey = keyof typeof PROMPTS;
 /**
  * Kept OUT of `PROMPTS` deliberately: `ai-safety.test.ts` asserts that every
  * entry in `PROMPTS` carries the coaching GUARDRAILS and the shared
- * PROMPT_VERSION. The generator prompt is a different job — authoring
- * content, not coaching against it — with its own version and its own
+ * PROMPT_VERSION. The generator prompt is a different job: authoring
+ * content, not coaching against it: with its own version and its own
  * (stricter) trust rules, so it lives in a separate registry that
  * `AiService` unions in only at its internal lookup site.
  */
@@ -161,7 +161,7 @@ export const AUTHOR_PROMPT_VERSION = "2026-08-14.2";
 /**
  * A fixed, distinctive phrase seeded into the generator's system prompt.
  * `validateGeneratedScenario` (shared) rejects any output that echoes it
- * verbatim — the model's own instructions leaking into its output means the
+ * verbatim: the model's own instructions leaking into its output means the
  * untrusted learner prompt steered it, which is a reject, not something to
  * sanitize around.
  */
@@ -289,7 +289,7 @@ export function buildGeneratorUserPrompt(
 
 /**
  * Inserted into the trusted (never learner-controlled) part of the user
- * message on a playground coaching call — never the system prompt, or
+ * message on a playground coaching call: never the system prompt, or
  * `redactSecrets`'s automatic system-prompt-line matching would blank it out.
  * Softens the coach's certainty because the rubric it is grading against was
  * authored by a model, not reviewed by a human curator.

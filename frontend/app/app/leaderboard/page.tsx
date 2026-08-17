@@ -7,7 +7,7 @@ import { tokens } from "@/lib/tokens";
 import { TopNavServer } from "@/features/dashboard/TopNavServer";
 import { LeaderboardView } from "@/features/leaderboard/LeaderboardView";
 
-export const metadata = { title: "Leaderboard — Securacy" };
+export const metadata = { title: "Leaderboard · Securacy" };
 
 const EMPTY: LeaderboardResponse = { scope: "global", entries: [], self: null };
 

@@ -8,7 +8,7 @@ import { tokens } from "@/lib/tokens";
  * Local sign-in for when Google OIDC has no credentials.
  *
  * Rendered only when NEXT_PUBLIC_ALLOW_DEV_LOGIN is set, and the API's
- * /auth/dev-login route 404s unless ALLOW_DEV_LOGIN is on there too — which
+ * /auth/dev-login route 404s unless ALLOW_DEV_LOGIN is on there too: which
  * loadConfig() refuses to allow in production. Two independent switches, both
  * off by default.
  */
@@ -78,7 +78,7 @@ export function DevLogin({ returnTo, primary = false }: { returnTo: string; prim
         </button>
       </div>
       <p style={{ fontSize: tokens.size.xs, color: tokens.color.textFaint, marginTop: tokens.space(2) }}>
-        Any address works — the account is created on first use.
+        Any address works. The account is created on first use.
       </p>
     </div>
   );

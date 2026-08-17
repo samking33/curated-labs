@@ -9,7 +9,7 @@ import { PlaygroundGenerationService } from "./playground-generation.service";
 const createSessionSchema = z.object({ title: z.string().min(1).max(200) });
 const updateDfdSchema = z.object({ drawioXml: z.string().min(1) });
 
-// No @Public() anywhere — SessionGuard (APP_GUARD) closes every route here
+// No @Public() anywhere. SessionGuard (APP_GUARD) closes every route here
 // and enforces CSRF on the mutations, with zero extra wiring.
 @Controller("playground")
 export class PlaygroundController {

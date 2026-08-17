@@ -13,7 +13,7 @@ export const releaseDecisionSchema = z.enum(["ship_it", "ship_with_conditions", 
  * architectural flaws below the level of a single spoof/tamper/etc., cloud
  * misconfiguration, third-party/dependency risk, privacy, AI/ML-specific
  * abuse, and identity/access failures broader than pure privilege
- * escalation — chosen to match this platform's own lab categories
+ * escalation: chosen to match this platform's own lab categories
  * (App Security, Cloud Security, AI Security, Privacy).
  */
 export const THREAT_CATEGORIES = [
@@ -33,7 +33,7 @@ export const THREAT_CATEGORIES = [
 export const threatCategorySchema = z.enum(THREAT_CATEGORIES);
 export type ThreatCategory = z.infer<typeof threatCategorySchema>;
 
-/** PROJECT.md §8. Order matters — `stepIndex` derives progression from it. */
+/** PROJECT.md. Order matters: `stepIndex` derives progression from it. */
 export const LAB_STEPS = [
   "intro",
   "architecture_issues",
@@ -123,7 +123,7 @@ export type LabSeed = z.infer<typeof labSeedSchema>;
 
 /**
  * Seed files use human-readable keys instead of UUIDs, so the cross-references
- * have to be checked before insert — a typo would otherwise become a silently
+ * have to be checked before insert: a typo would otherwise become a silently
  * missing answer key that only surfaces when a learner reaches step 4.
  */
 export function validateSeedReferences(seed: LabSeed): string[] {

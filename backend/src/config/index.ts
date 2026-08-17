@@ -34,19 +34,19 @@ const schema = z.object({
   /**
    * Ceiling for a whole coaching task, across every retry and every fallback
    * model. This is what a learner actually waits on, so it is the number to
-   * tune — the per-attempt timeout only bounds a single request.
+   * tune: the per-attempt timeout only bounds a single request.
    */
   AI_TASK_BUDGET_MS: z.coerce.number().int().default(45000),
 
   /**
    * Dev-only bypass so the lab workflow can be exercised (and E2E tested)
-   * without Google credentials. Refused outside development — see below.
+   * without Google credentials. Refused outside development: see below.
    */
   ALLOW_DEV_LOGIN: z.coerce.boolean().default(false),
 
   /**
    * Scenario generation is a distinct workload from coaching calls: it needs
-   * nemotron-3-super-120b-a12b specifically (benchmarked — it's the only
+   * nemotron-3-super-120b-a12b specifically (benchmarked: it's the only
    * candidate model that reliably returns a valid full scenario), which runs
    * ~85s and ~6-7k output tokens, far past AI_TASK_BUDGET_MS/AI_MAX_OUTPUT_TOKENS.
    * Hence separate budget/token ceilings, used only by generateScenario().
@@ -55,7 +55,7 @@ const schema = z.object({
   PLAYGROUND_GEN_BUDGET_MS: z.coerce.number().int().default(150000),
   /**
    * Without this, NimClient's per-attempt timeout falls back to the generic
-   * AI_TIMEOUT_MS (25s) — far below what nemotron-3-super-120b-a12b actually
+   * AI_TIMEOUT_MS (25s): far below what nemotron-3-super-120b-a12b actually
    * needs, so the one model benchmarked to reliably return a valid scenario
    * would time out on literally every attempt and every job would silently
    * fall back to weaker models that this task's own comment says aren't
@@ -74,7 +74,7 @@ const schema = z.object({
   /** A job stuck "running" past this long is reaped back to "failed". */
   PLAYGROUND_STALE_JOB_MS: z.coerce.number().int().default(300000),
 
-  /** Playground scenario generation only (AnthropicClient) — NIM's
+  /** Playground scenario generation only (AnthropicClient). NIM's
    *  fallback chain was unreliable for this specific task. Every other AI
    *  call still goes through NimClient. */
   ANTHROPIC_API_KEY: z.string().default(""),
@@ -93,7 +93,7 @@ const schema = z.object({
 
 export type AppConfig = z.infer<typeof schema> & {
   isProduction: boolean;
-  /** Served to the public over TLS — harden transport regardless of NODE_ENV. */
+  /** Served to the public over TLS: harden transport regardless of NODE_ENV. */
   isHardened: boolean;
   googleConfigured: boolean;
   nimConfigured: boolean;

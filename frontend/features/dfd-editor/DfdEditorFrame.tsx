@@ -5,7 +5,7 @@ import { compileToDrawioXml, type DfdGraph, type DfdSelection } from "@curated-l
 import { embedUrl, loadAction, parseDrawioMessage, type DrawioEvent } from "./drawio-protocol";
 
 /** Looks up the full node/edge the bridge script's raw kind/id refers to in
- *  the graph we already loaded — never trusts a client-reconstructed object
+ *  the graph we already loaded: never trusts a client-reconstructed object
  *  built from raw XML attributes. Falls back to null for an id the current
  *  graph doesn't recognize (stale message from a graph that's since changed). */
 function resolveSelection(data: Extract<DrawioEvent, { event: "dfd-selection" }>, graph: DfdGraph): DfdSelection {
@@ -33,7 +33,7 @@ export function DfdEditorFrame({
   /** Escape pressed inside the editor. */
   onEscape?: () => void;
   /** Called with the raw draw.io XML on save. Extraction and referential
-   *  validation happen server-side (PATCH .../dfd) — never trust a
+   *  validation happen server-side (PATCH .../dfd): never trust a
    *  client-derived DfdGraph for the authoritative check. */
   onSave?: (xml: string) => void | Promise<void>;
 }) {
@@ -65,7 +65,7 @@ export function DfdEditorFrame({
     return () => window.removeEventListener("message", handleMessage);
   }, [graph, mode, onSave, onSelectionChange, onEscape]);
 
-  // embedUrl's clibs param (edit mode only) needs an absolute origin — see
+  // embedUrl's clibs param (edit mode only) needs an absolute origin: see
   // its own comment. That's a browser-only value, so the src is built after
   // mount rather than during render: computing it during render would give
   // the server and the client different values for the same attribute (no

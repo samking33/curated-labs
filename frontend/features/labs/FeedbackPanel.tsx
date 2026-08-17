@@ -7,8 +7,8 @@ import { tokens } from "@/lib/tokens";
 /**
  * Renders AI coaching plus any deterministic result.
  *
- * Handles all four states §16 requires: loading, success, retry-able failure,
- * and AI unavailable. The last one is important — the answer is already saved,
+ * Handles all four states: loading, success, retry-able failure,
+ * and AI unavailable. The last one is important: the answer is already saved,
  * so this must read as "coaching is missing", never "your work was lost".
  */
 export function FeedbackPanel({
@@ -113,7 +113,7 @@ export function FeedbackPanel({
         <Card style={{ borderColor: tokens.color.accent }}>
           <strong style={{ fontSize: tokens.size.lg }}>Every way into this system</strong>
           <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm, margin: `${tokens.space(2)} 0` }}>
-            Ticked ones you found. An attack surface is a way in, not a weakness — naming what could
+            Ticked ones you found. An attack surface is a way in, not a weakness. Naming what could
             go wrong there is the next step.
           </p>
           <ul style={{ display: "grid", gap: tokens.space(2), listStyle: "none", padding: 0, margin: 0 }}>
@@ -175,7 +175,7 @@ export function FeedbackPanel({
 }
 
 /** Which surfaces the learner got, from the deterministic result the server
- *  computed — never inferred from the model's prose. */
+ *  computed: never inferred from the model's prose. */
 function identifiedIds(result: StepResult): string[] {
   const d = result.deterministicResult as { identifiedIds?: unknown } | null;
   return Array.isArray(d?.identifiedIds) ? (d.identifiedIds as string[]) : [];

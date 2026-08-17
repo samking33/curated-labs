@@ -1,5 +1,5 @@
 /** draw.io embed postMessage event shapes (proto=json). Stable across
- *  releases — see https://www.drawio.com/doc/faq/embed-mode (or the
+ *  releases: see https://www.drawio.com/doc/faq/embed-mode (or the
  *  vendored client's own bundled docs) for the authoritative reference. */
 export type DrawioEvent =
   | { event: "init" }
@@ -9,13 +9,13 @@ export type DrawioEvent =
   | { event: "exit" }
   /** Emitted by our own same-origin bridge script
    *  (frontend/public/drawio-selection-bridge/dfd-selection-bridge.js), not
-   *  the vendored draw.io embed itself — the embed's own postMessage
+   *  the vendored draw.io embed itself: the embed's own postMessage
    *  protocol has no selection-change event. `kind`/`id` are the raw
    *  dfdKind/id attributes read off the selected mxGraph cell; null for no
    *  selection, multi-select, or a cell with no dfdKind (trust boundary,
    *  freehand shape). */
   | { event: "dfd-selection"; kind: "node" | "edge" | null; id: string | null }
-  /** Escape pressed while focus was inside the editor — also from our own
+  /** Escape pressed while focus was inside the editor: also from our own
    *  bridge, so the parent can close a full-screen view the iframe has
    *  keyboard focus in. */
   | { event: "dfd-escape" };
@@ -42,7 +42,7 @@ export function loadAction(xml: string): { action: "load"; xml: string; autosave
  *  derives both `chromeless` and `editable` from the single `chrome` param,
  *  and `chromeless && !editable` is what flips `graph.isEnabled` to `false`
  *  (real interaction lockout, not just hidden toolbar). `urlParams.chromeless`
- *  itself has zero read sites in that bundle — it's a documented flag from
+ *  itself has zero read sites in that bundle: it's a documented flag from
  *  draw.io's public embed docs that this vendored release doesn't wire up.
  *  Verified by grepping the vendored bundle directly per this task's note to
  *  confirm flags against the actual asset before trusting the public docs.
@@ -51,20 +51,20 @@ export function loadAction(xml: string): { action: "load"; xml: string; autosave
  *  (grepped the same way): `App.prototype.start` calls `restoreLibraries()`
  *  unconditionally, which reads `urlParams.clibs` (a `;`-separated list)
  *  and passes it to `loadLibraries`. Each entry's first character is a type
- *  tag — `"U"` for a URL-backed `UrlLibrary` — and the rest is
+ *  tag, `"U"` for a URL-backed `UrlLibrary`, and the rest is
  *  `decodeURIComponent`'d once to get the library file's URL. `urlParams`
  *  itself is parsed from the raw, undecoded query string (bootstrap.js), so
- *  the value must NOT be pre-encoded here — `URLSearchParams` supplies the
+ *  the value must NOT be pre-encoded here: `URLSearchParams` supplies the
  *  single encoding pass the app's own `decodeURIComponent` expects to undo.
  *  `restoreLibraries` bails out when `this.sidebar` is null, which is only
- *  the case in chromeless (view) mode, so this is edit-mode only — matches
+ *  the case in chromeless (view) mode, so this is edit-mode only, matching
  *  Task 8's dfd-shapes.xml, which only matters when dragging shapes onto an
  *  editable canvas.
  *
  *  The URL itself must be absolute, not a same-origin-relative path:
  *  `loadTemplate()` (also grepped from app.min.js) only fetches a library
  *  URL directly when `isCorsEnabledForUrl(url)` is true, and that check is
- *  `url.substring(0, location.origin.length) == location.origin` — a plain
+ *  `url.substring(0, location.origin.length) == location.origin`: a plain
  *  string-prefix match against the *full* origin, which a relative path
  *  like `/drawio-shapes/dfd-shapes.xml` never satisfies. Failing that check
  *  routes the fetch through `PROXY_URL + "?url=..."`, a backend proxy
@@ -75,12 +75,12 @@ const DFD_SHAPE_LIBRARY_URL = "/drawio-shapes/dfd-shapes.xml";
 
 /** Maps our coarse `provider` values to the vendored build's built-in
  *  sidebar library keys (`urlParams.libs`, `;`-separated, matched against
- *  `Sidebar.prototype.configuration[k].id` — see the findings doc's
+ *  `Sidebar.prototype.configuration[k].id`: see the findings doc's
  *  `libs=` section for the grep evidence). Live-verified real values, not
  *  guesses: `azure` resolves to the newer `azure2` library (not the older
  *  `azure` stencil set the plan first guessed). `gcp` needs BOTH `gcp3`
- *  (process/data_store/service — the modern named-stencil library) AND
- *  `gcp2` (queue — gcp3 has no Pub/Sub/queue icon, confirmed by grepping
+ *  (process/data_store/service: the modern named-stencil library) AND
+ *  `gcp2` (queue: gcp3 has no Pub/Sub/queue icon, confirmed by grepping
  *  its 46 stencil names for pubsub/queue/messag/topic/event and finding
  *  none), so a single provider can map to more than one library key. */
 const PROVIDER_LIBRARY_KEY: Record<"aws" | "azure" | "gcp", string[]> = {
@@ -90,7 +90,7 @@ const PROVIDER_LIBRARY_KEY: Record<"aws" | "azure" | "gcp", string[]> = {
 };
 
 /** `addEmbedButtons` (grepped from app.min.js) gates its floating "Save"/
- *  "Exit" buttons on `embed=1` alone, not on `chromeless` — they'd render
+ *  "Exit" buttons on `embed=1` alone, not on `chromeless`: they'd render
  *  over the canvas in BOTH modes otherwise. This app never uses them: view
  *  mode has nothing to save, and the app's own onSave callback + page chrome
  *  (e.g. "Back to catalog") already cover save/exit. `urlParams.noSaveBtn`

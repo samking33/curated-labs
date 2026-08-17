@@ -3,7 +3,7 @@
 // answer key lives in one JSONB column here and in six normalised tables
 // there; an abstraction over that saves ~12 lines and costs the compile error
 // you want when the two schemas diverge. The PURE parts are shared via
-// backend/src/common/workflow.ts — if step order, replay, or grading
+// backend/src/common/workflow.ts: if step order, replay, or grading
 // arithmetic changes, change it THERE and both surfaces get it.
 
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
@@ -41,7 +41,7 @@ export class PlaygroundAttemptsService {
 
   async start(user: AuthContext, scenarioId: string) {
     if (!isUuid(scenarioId)) throw new NotFoundException("Scenario not found.");
-    // Ownership check — answerKey() 404s if this scenario isn't the caller's.
+    // Ownership check: answerKey() 404s if this scenario isn't the caller's.
     await this.generation.answerKey(scenarioId, user.userId);
 
     const existing = await this.prisma.playgroundAttempt.findFirst({
@@ -100,7 +100,7 @@ export class PlaygroundAttemptsService {
     }));
   }
 
-  /** Only the owner may write. Reads 404 on ownership mismatch; writes 403 —
+  /** Only the owner may write. Reads 404 on ownership mismatch; writes 403,
    *  the same deliberate asymmetry as AttemptsService.loadForWrite. */
   private async loadForWrite(user: AuthContext, attemptId: string) {
     if (!isUuid(attemptId)) throw new NotFoundException("Attempt not found.");
@@ -269,7 +269,7 @@ export class PlaygroundAttemptsService {
       tone: "generated",
     });
 
-    // No learnerThreatMatch table for playground — the matches live only in
+    // No learnerThreatMatch table for playground: the matches live only in
     // the submission's aiFeedbackJson.
     const matched = ai.matches ?? [];
     const reveal = submission.attemptNumber >= THREAT_RETRY_LIMIT;
@@ -430,7 +430,7 @@ export class PlaygroundAttemptsService {
       tone: "generated",
     });
 
-    // No LearnerReleaseDecision row for playground — the decision lives in
+    // No LearnerReleaseDecision row for playground: the decision lives in
     // answerJson. Own transaction (not finish()): this step completes the
     // attempt instead of advancing to another step.
     await this.prisma.$transaction([

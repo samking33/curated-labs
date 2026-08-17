@@ -6,7 +6,7 @@ import { AppNav } from "@/features/auth/AppNav";
 import { PrivacyPreferences } from "@/features/settings/PrivacyPreferences";
 import { SUPPORT_EMAIL } from "@/lib/support";
 
-export const metadata = { title: "Settings — Curated Labs" };
+export const metadata = { title: "Settings · Securacy" };
 
 export default async function SettingsPage() {
   const cookie = (await headers()).get("cookie") ?? undefined;

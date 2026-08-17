@@ -6,7 +6,7 @@ import { Button, Card, Field, inputStyle } from "@/components/ui";
 import { priorityColor, tokens } from "@/lib/tokens";
 
 /**
- * The five guided steps (§8). Each is a controlled form that hands a validated
+ * The five guided steps. Each is a controlled form that hands a validated
  * payload to LabShell; none of them talks to the API directly, so the workflow
  * has a single submission path with one retry story.
  */
@@ -27,7 +27,7 @@ export function ArchitectureIssuesStep({
   const [text, setText] = useState("");
   const [refs, setRefs] = useState<{ nodes: string[]; edges: string[] }>({ nodes: [], edges: [] });
 
-  // §9 requires the DFD selection be referenceable from the answer.
+  // requires the DFD selection be referenceable from the answer.
   const attach = () => {
     if (!selection) return;
     setRefs((prev) =>
@@ -46,7 +46,7 @@ export function ArchitectureIssuesStep({
           onChange={(e) => setText(e.target.value)}
           rows={8}
           style={{ ...inputStyle, resize: "vertical", fontFamily: tokens.font.sans }}
-          placeholder="Start with the trust boundaries — what crosses them, and what protects it?"
+          placeholder="Start with the trust boundaries: what crosses them, and what protects it?"
         />
       </Field>
 
@@ -96,7 +96,7 @@ export function AttackSurfacesStep({
       <StepHeading n={2} title="Where can untrusted input reach this system?" />
       <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm, marginTop: 0 }}>
         Click a box or an arrow in the diagram, then attach it. An attack surface is anywhere data
-        crosses a trust boundary, or anyone outside the system talks to it — not a weakness yet,
+        crosses a trust boundary, or anyone outside the system talks to it. Not a weakness yet,
         just a way in.
       </p>
 
@@ -168,14 +168,14 @@ export function ThreatIdentificationStep({
             color: tokens.color.warning,
           }}
         >
-          <strong>Try again — attempt {attemptNumber}.</strong>{" "}
+          <strong>Try again. Attempt {attemptNumber}.</strong>{" "}
           {retriesLeft > 0
             ? "Your previous answers are kept below. Read the coach's feedback and add what you missed."
             : "This is your last attempt; after it the full threat set is revealed so you can compare."}
         </div>
       )}
       <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm }}>
-        One threat per line. Describe them in your own words — matching is on meaning, not wording.
+        One threat per line. Describe them in your own words. Matching is on meaning, not wording.
       </p>
 
       <div style={{ display: "grid", gap: tokens.space(2), marginBottom: tokens.space(3) }}>
@@ -469,7 +469,7 @@ function RefPicker({
   const total = refs.nodes.length + refs.edges.length;
   // The embedded draw.io editor never emits the "select" postMessage event in
   // embed mode (confirmed against the vendored build), so `selection` is
-  // permanently null here — there is no click-to-select in this editor.
+  // permanently null here: there is no click-to-select in this editor.
   // Rendering the attach button disabled with "select something" copy would
   // tell the user to do something that's structurally impossible, so it only
   // renders on the (currently unreachable) chance a selection exists.

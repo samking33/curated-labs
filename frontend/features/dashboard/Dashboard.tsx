@@ -38,9 +38,9 @@ export function Dashboard({
   monthsByRange: Record<Range, { label: string; value: number }[]>;
   learners: { name: string; avatarUrl?: string | null }[];
   today: { day: number; weekday: string; month: string; weekdayIndex: number };
-  /** Null when the points fetch failed — the badge hides rather than lies. */
+  /** Null when the points fetch failed: the badge hides rather than lies. */
   points: number | null;
-  /** Frozen server time. See lib/format.ts — never read a live clock here. */
+  /** Frozen server time. See lib/format.ts: never read a live clock here. */
   nowIso: string;
 }) {
   const router = useRouter();
@@ -59,7 +59,7 @@ export function Dashboard({
 
   const inFlight = progress?.recent.find((r) => r.status !== "completed");
   const stepNumber = inFlight ? STEP_ORDER.indexOf(inFlight.currentStep) : 0;
-  // Real and derived from the attempt's actual startedAt — not a client-side
+  // Real and derived from the attempt's actual startedAt: not a client-side
   // stopwatch. Both inputs are frozen props, so server and client agree.
   const startedAgo = inFlight ? formatTimeAgo(new Date(nowIso), new Date(inFlight.startedAt)) : null;
 

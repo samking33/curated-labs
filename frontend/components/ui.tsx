@@ -5,8 +5,8 @@ import { tokens } from "@/lib/tokens";
 
 /**
  * Small shared primitives so feature code never reaches for a raw colour.
- * Deliberately unstyled beyond the tokens — the real visual identity lands
- * later and should only need changes here and in tokens.ts (§16).
+ * Deliberately unstyled beyond the tokens: the real visual identity lands
+ * later and should only need changes here and in tokens.ts.
  */
 
 export function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
@@ -94,7 +94,7 @@ export const inputStyle: CSSProperties = {
   fontFamily: tokens.font.sans,
 };
 
-/** Every async surface must show loading / error / empty / success (§25). */
+/** Every async surface must show loading / error / empty / success. */
 export function Alert({ tone, children }: { tone: "error" | "warning" | "info"; children: ReactNode }) {
   const color = { error: tokens.color.danger, warning: tokens.color.warning, info: tokens.color.accent }[tone];
   return (

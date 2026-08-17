@@ -5,7 +5,7 @@ import { PlaygroundAttemptsService } from "./playground-attempts.service";
 import { PlaygroundController } from "./playground.controller";
 import { PlaygroundAttemptsController } from "./playground-attempts.controller";
 
-// Prisma and Audit are @Global() — only AiModule needs an explicit import here.
+// Prisma and Audit are @Global(): only AiModule needs an explicit import here.
 @Module({
   imports: [AiModule],
   controllers: [PlaygroundController, PlaygroundAttemptsController],

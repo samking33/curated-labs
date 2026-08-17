@@ -5,9 +5,9 @@ import { tokens } from "@/lib/tokens";
 import { AppNav } from "@/features/auth/AppNav";
 import { CategoryGrid, type Category } from "@/features/catalog/CategoryGrid";
 
-export const metadata = { title: "Catalog — Curated Labs" };
+export const metadata = { title: "Catalog · Securacy" };
 
-/** Categories first, labs second — the browse path the product describes. */
+/** Categories first, labs second: the browse path the product describes. */
 export default async function CatalogPage() {
   const cookie = (await headers()).get("cookie") ?? undefined;
   const [me, categories] = await Promise.all([

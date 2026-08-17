@@ -4,7 +4,7 @@ import { stepIndex, type LabStep, type StepResult } from "@curated-labs/shared";
 /**
  * Pure grading/ordering logic shared by the curated `AttemptsService` and the
  * playground `PlaygroundAttemptsService`. Extracted so the two forked services
- * cannot silently drift on how a step is graded — no Prisma, no AI, no I/O.
+ * cannot silently drift on how a step is graded: no Prisma, no AI, no I/O.
  */
 
 /** Steps must be done in order. Re-submitting the *current* step is allowed
@@ -31,7 +31,7 @@ export function replayResult(
     deterministicResult: submission.deterministicResultJson ?? null,
     revealedAttackSurfaces: null,
     revealedThreats: null,
-    // A replay is a retried request for an answer already scored — the points
+    // A replay is a retried request for an answer already scored: the points
     // and cheer already reached the client on the original response.
     pointsAwarded: 0,
     cheers: [],
@@ -59,7 +59,7 @@ export function comparePriorities(
   });
 }
 
-/** Correctness is deterministic and computed before the AI runs — the model
+/** Correctness is deterministic and computed before the AI runs: the model
  *  explains this verdict; it never produces it. */
 export function gradeMitigations(
   pairings: { threatId: string; mitigationId: string }[],
@@ -79,7 +79,7 @@ export function gradeMitigations(
 }
 
 /** Fixed copy keyed on whether the learner's release decision matches the
- *  lab's recommended one — deterministic so it's reliable regardless of
+ *  lab's recommended one: deterministic so it's reliable regardless of
  *  what the model says in the same response. */
 export function releaseHeadline(aligned: boolean): string {
   return aligned

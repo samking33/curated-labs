@@ -10,7 +10,7 @@ export const metadata = { title: "Securacy" };
 
 /** The fork every session starts from: a guided curated lab, or a
  *  self-described Custom Playground scenario. Progress/activity moved to
- *  /app/dashboard — this is the landing page precisely so it isn't buried
+ *  /app/dashboard: this is the landing page precisely so it isn't buried
  *  behind a full dashboard on every login. */
 export default async function AppHome() {
   const cookie = (await headers()).get("cookie") ?? undefined;

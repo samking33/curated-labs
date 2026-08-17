@@ -42,7 +42,7 @@ const ENDPOINT: Partial<Record<LabStep, string>> = {
 };
 
 /**
- * Owns the whole guided workflow (§16): step state, submission, retry, and the
+ * Owns the whole guided workflow: step state, submission, retry, and the
  * DFD/answer split. Step components stay presentational so the visual identity
  * can be replaced without touching workflow logic.
  */
@@ -75,54 +75,43 @@ export function LabShell({
   const [result, setResult] = useState<StepResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Only set when a submission actually earned a "correct answer" cheer —
+  // Only set when a submission actually earned a "correct answer" cheer,
   // the flat participation awards on steps 1 and 5 never populate this.
   const [cheer, setCheer] = useState<{ key: string; points: number; cheers: string[] } | null>(null);
 
   /**
-   * Set after a submission that advances the lab, holding the step to move to
-   * once the learner has actually read the coaching for the step they just
-   * finished.
-   *
-   * Without this the workflow advanced the instant a step was submitted, so
-   * the next step's form rendered directly above its own feedback — the
-   * revealed threat list appeared *below* the prioritization table, and the
-   * priority and mitigation coaching was skipped past entirely. Both were
-   * reported from real use: "it goes to prioritization and then I need to
-   * scroll down to look at the detailed threat list", and "it did not show me
-   * priority reasoning, it directly jumped to the next step".
+   * The step to move to once the learner has read the coaching for the step
+   * they just submitted. Advancing immediately would render the next form
+   * above the feedback for the previous one, where it goes unread.
    */
   const [pendingStep, setPendingStep] = useState<LabStep | null>(null);
 
   /**
-   * Full-screen diagram. Fitted into the side panel the DFD renders at about
-   * 35% zoom, which puts a node at roughly 67x32 real pixels — too small to
-   * read and an awkward click target, which is most of why selecting felt
-   * unreliable. Expanding restyles the SAME container rather than moving or
-   * re-rendering the iframe, so the editor is never reloaded and the current
-   * selection survives the toggle.
+   * Full-screen diagram. In the side panel the DFD sits near 35% zoom, which
+   * leaves a node about 67x32 real pixels: hard to read and a poor click
+   * target. Expanding restyles the same container rather than moving the
+   * iframe, so the editor never reloads and the selection survives the toggle.
    */
   const [expanded, setExpanded] = useState(false);
 
   /**
-   * Read-only look-back. Holds the finished step being reviewed, if any.
-   * Submitted answers cannot be changed — the server has already graded them
-   * and awarded points — so this shows what was said and what the coach
-   * replied, and nothing more.
+   * Read-only look-back at a finished step. Submitted answers cannot change,
+   * since the server has already graded them and awarded points, so this shows
+   * only what was said and what the coach replied.
    */
   const [reviewing, setReviewing] = useState<LabStep | null>(null);
   const [history, setHistory] = useState<Record<string, { answer: unknown; aiFeedback: unknown; deterministic: unknown }>>({});
 
   /**
-   * The threat list used by steps 3 and 4. It only ever comes from a reveal
-   * response — the lab payload never carries canonical threats (§28), so before
-   * reveal there is genuinely nothing here to leak.
+   * The threat list used by steps 3 and 4, populated only by a reveal
+   * response. The lab payload never carries canonical threats, so there is
+   * nothing here to leak before the reveal.
    */
   const [threats, setThreats] = useState<RevealedThreat[]>([]);
 
   /**
    * Threats-step state. Tracked separately because StepResult describes the
-   * step the learner is now ON, not the one they just submitted — after step 1
+   * step the learner is now ON, not the one they just submitted: after step 1
    * the result already reads "threats", which would fake a retry.
    */
   const [lastThreatAnswer, setLastThreatAnswer] = useState<string[]>([]);
@@ -131,7 +120,7 @@ export function LabShell({
   /**
    * Restore an in-flight attempt on mount. Without this a refresh drops the
    * revealed threat list and steps 3–4 render with nothing to work on, so the
-   * lab cannot be finished — and §16 promises learners can leave and return.
+   * lab cannot be finished: and promises learners can leave and return.
    */
   useEffect(() => {
     if (!initialAttemptId) return;
@@ -146,14 +135,10 @@ export function LabShell({
         }>(`${attemptBase}/${initialAttemptId}`);
         if (cancelled) return;
 
-        // Never move the learner BACKWARDS. Starting a lab calls
-        // router.refresh(), which makes the server hand this component an
-        // attemptId for the first time and re-runs this effect — with the
-        // attempt still recorded as "intro", since the first step has not
-        // been submitted yet. Assigning that straight back put the learner
-        // on the brief again, one click after pressing Start. Taking the
-        // later of the two keeps a genuine reload restoring progress while
-        // ignoring a stale "intro" arriving after we have already advanced.
+        // Only ever move forwards. Starting a lab triggers a refresh that
+        // re-runs this effect while the attempt still reads "intro", so taking
+        // the later of the two restores real progress on a reload without
+        // sending the learner back to the brief.
         setStep((prev) => (stepIndex(attempt.currentStep) > stepIndex(prev) ? attempt.currentStep : prev));
         if (attempt.revealedThreats) setThreats(attempt.revealedThreats);
 
@@ -180,7 +165,7 @@ export function LabShell({
             deterministicResult: last.deterministicResultJson ?? null,
             revealedAttackSurfaces: null,
             revealedThreats: null,
-            // Reconstructing history on page load, not a live award — no
+            // Reconstructing history on page load, not a live award: no
             // toast for points already earned in a past visit.
             pointsAwarded: 0,
             cheers: [],
@@ -204,7 +189,7 @@ export function LabShell({
       // Resume where the learner left off rather than restarting the lab.
       setStep(attempt.currentStep === "intro" ? "architecture_issues" : attempt.currentStep);
       // The DFD panel stays editable across every step (see the `mode` prop
-      // below) — this just keeps the `lab` prop in sync with any edit made
+      // below): this just keeps the `lab` prop in sync with any edit made
       // before starting, so a subsequent iframe reload (graph reference
       // change) never shows stale content next to a save that already made
       // it to the database.
@@ -237,7 +222,7 @@ export function LabShell({
         if (res.cheers.length > 0) {
           setCheer({ key: res.submissionId, points: res.pointsAwarded, cheers: res.cheers });
         }
-        // Staying on the same step means a retry (threats, before reveal) —
+        // Staying on the same step means a retry (threats, before reveal),
         // the learner needs the form back immediately. Reaching "completed"
         // ends the lab, and its own summary already shows everything. Any
         // other advance pauses on the coaching first.
@@ -310,7 +295,7 @@ export function LabShell({
               <path d="M12 7.6v5.2M12 16.2h.01" stroke={tokens.color.accent} strokeWidth="1.9" strokeLinecap="round" />
             </svg>
             <span style={{ fontSize: tokens.size.sm, lineHeight: 1.5, color: tokens.color.text }}>
-              Nothing here is graded. You can leave and come back — your answers save as you go.
+              Nothing here is graded. You can leave and come back, and your answers save as you go.
             </span>
           </div>
 
@@ -399,16 +384,14 @@ export function LabShell({
       {/*
        * Diagram left, work right. The diagram is the subject of every step, so
        * it keeps the larger column and stays pinned while the right column
-       * scrolls — previously both scrolled together and the learner lost sight
-       * of the thing they were being asked about.
+       * scrolls.
        */}
       <div
+        className="lab-split"
         style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.45fr) minmax(380px, 1fr)",
           gap: tokens.space(5),
           alignItems: "start",
-          padding: tokens.space(7),
+          padding: `clamp(${tokens.space(4)}, 3vw, ${tokens.space(7)})`,
         }}
       >
         <div
@@ -467,7 +450,7 @@ export function LabShell({
           <DfdEditorFrame
             graph={lab.dfd}
             // Editable for the whole workflow whenever this scenario has a
-            // save path (Playground only — curated labs never pass
+            // save path (Playground only: curated labs never pass
             // dfdSavePath and stay view-only throughout, as intended).
             mode={dfdSavePath ? "edit" : "view"}
             onSelectionChange={setSelection}
@@ -476,7 +459,7 @@ export function LabShell({
               dfdSavePath
                 ? async (xml) => {
                     // DfdEditorFrame doesn't await/catch this (see its own
-                    // comment) — an uncaught rejection here is a silent save
+                    // comment): an uncaught rejection here is a silent save
                     // failure with zero feedback, which is exactly the
                     // referential-integrity 400 case (delete a node a threat
                     // still points at). Route it through the same error
@@ -630,7 +613,7 @@ function PastStep({
   );
 }
 
-/** Submissions are step-shaped, not one type — render whichever fields a
+/** Submissions are step-shaped, not one type: render whichever fields a
  *  given step actually carries rather than dumping raw JSON at the learner. */
 function summariseAnswer(answer: unknown): string {
   const a = answer as Record<string, unknown> | null;
@@ -685,5 +668,5 @@ function messageFor(err: unknown): string {
     if (err.code === "UNAUTHORIZED") return "Your session expired. Sign in again to continue.";
     return err.message;
   }
-  return "Could not reach the server. Your previous answers are safe — try again.";
+  return "Could not reach the server. Your previous answers are safe, so try again.";
 }

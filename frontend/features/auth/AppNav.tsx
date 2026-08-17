@@ -18,8 +18,10 @@ export function AppNav({ me }: { me: MeResponse }) {
       style={{
         display: "flex",
         alignItems: "center",
+        flexWrap: "wrap",
         gap: tokens.space(4),
-        padding: `${tokens.space(3)} ${tokens.space(6)}`,
+        rowGap: tokens.space(2),
+        padding: `${tokens.space(3)} clamp(${tokens.space(3)}, 4vw, ${tokens.space(6)})`,
         borderBottom: `1px solid ${tokens.color.border}`,
         background: tokens.color.surface,
       }}
@@ -31,9 +33,9 @@ export function AppNav({ me }: { me: MeResponse }) {
       <NavLink href="/app/playground">Playground</NavLink>
       {org && <NavLink href={`/app/org/${org.slug}`}>{org.name}</NavLink>}
       <NavLink href="/app/settings">Settings</NavLink>
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: tokens.space(3) }}>
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", flexWrap: "wrap", gap: tokens.space(3) }}>
         <ReportIssueLink />
-        <span style={{ fontSize: tokens.size.sm, color: tokens.color.textMuted }}>{me.user.email}</span>
+        <span style={{ fontSize: tokens.size.sm, color: tokens.color.textMuted, overflowWrap: "anywhere" }}>{me.user.email}</span>
         <button
           onClick={logout}
           style={{ background: "none", border: "none", color: tokens.color.textMuted, cursor: "pointer", fontSize: tokens.size.sm, textDecoration: "underline" }}

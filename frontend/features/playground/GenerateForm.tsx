@@ -10,17 +10,15 @@ import { tokens } from "@/lib/tokens";
 type Difficulty = "beginner" | "intermediate" | "advanced";
 
 const POLL_MS = 2000;
-// Each of the up to 2 attempts (the initial call plus the one repair retry
-// on validation failure) gets its own PLAYGROUND_GEN_BUDGET_MS (150s server-
-// side default) — so the real worst case is closer to 2x that plus queueing/
-// processing overhead, not the single-budget-plus-a-bit this used to assume.
-// A live dry run against real prompts measured a genuine single-attempt
-// success taking 196s, already past the old 180s cap — 6 minutes gives
-// real margin above the worst realistic case instead of just the typical one.
+// Both attempts (the initial call and the one repair retry on validation
+// failure) each get their own PLAYGROUND_GEN_BUDGET_MS, 150s by default, so
+// the worst case is roughly twice that plus queueing. A measured single
+// attempt has taken 196s, so 6 minutes leaves margin above the worst
+// realistic case rather than the typical one.
 const MAX_POLLS = 180;
 // Calibration point for the progress bar's asymptotic curve. Measured end to
 // end against the real model: 70s, 94s, 196s and 230s. Tuned to the slow end
-// of that rather than the median — a bar that reaches 75% and crawls reads as
+// of that rather than the median: a bar that reaches 75% and crawls reads as
 // stuck, which is exactly how a working 230s generation got reported as
 // "playground is not accessible". Real completion always drives the actual
 // 100%, never this timer.
@@ -50,8 +48,8 @@ export function GenerateForm() {
 
   // Ticks independently of the 2s job poll so the bar visibly moves instead
   // of jumping in steps. There's no real per-stage signal from the server to
-  // drive an exact percentage, so this is a deliberate asymptotic estimate —
-  // see EXPECTED_MS/PROGRESS_CAP — that never claims 100% on its own; only
+  // drive an exact percentage, so this is a deliberate asymptotic estimate:
+  // see EXPECTED_MS/PROGRESS_CAP: that never claims 100% on its own; only
   // an actual "succeeded" job status does that (in poll(), not here).
   useEffect(() => {
     if (!busy) return;
@@ -68,7 +66,7 @@ export function GenerateForm() {
   // Resetting on mount (not just setting true on cleanup) matters: React
   // Strict Mode's dev-only mount→cleanup→remount cycle would otherwise leave
   // this stuck at true forever after the very first render, before the user
-  // ever clicks anything — poll() would then exit on its first line with
+  // ever clicks anything: poll() would then exit on its first line with
   // busy still true, showing "Generating…" with no request ever sent.
   useEffect(() => {
     cancelled.current = false;
@@ -95,7 +93,7 @@ export function GenerateForm() {
       // "a minute or two" made a working generation look hung.
       setStatus(
         job.status === "running"
-          ? "Building your scenario — this usually takes 2–4 minutes. You can leave this tab open."
+          ? "Building your scenario. This usually takes 2 to 4 minutes, and you can leave this tab open."
           : "Queued…",
       );
       await sleep(POLL_MS);

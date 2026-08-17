@@ -11,7 +11,7 @@ import { NimClient, type ChatTurn } from "../ai/nim-client";
  * one is open-ended but is never given lab answer data in the first place, so
  * there is nothing here for an injection to extract.
  *
- * Runs on the fast model — a learner typing in a chat box expects a reply in
+ * Runs on the fast model: a learner typing in a chat box expects a reply in
  * about a second, and this is conversational coaching rather than evaluation.
  */
 @Injectable()
@@ -68,11 +68,9 @@ ${context}`;
    * and step names are already visible in the catalogue and the UI, so
    * including them costs nothing and makes the coach specific rather than
    * generic. Curated labs and Custom Playground are separate Prisma models
-   * (LabAttempt / PlaygroundAttempt) with no shared table — a learner who
-   * has only ever used Playground used to get "hasn't started a lab yet"
-   * regardless of how deep into a scenario they were, since this only
-   * queried labAttempt. Querying both and merging by recency treats the two
-   * modes equally, matching how the rest of the app treats them.
+   * (LabAttempt / PlaygroundAttempt) with no shared table, so both are
+   * queried and merged by recency. Reading only one would leave a learner
+   * who works entirely in Playground looking like they had never started.
    */
   private async contextFor(userId: string): Promise<string> {
     const [labAttempts, playgroundAttempts] = await Promise.all([

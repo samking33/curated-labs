@@ -119,7 +119,7 @@ export class AuthController {
   }
 
   /**
-   * Learner-controlled preferences. Only ever writes the caller's own row —
+   * Learner-controlled preferences. Only ever writes the caller's own row:
    * there is no user id in the path, so one learner cannot change another's.
    */
   @Patch("me/preferences")
@@ -135,7 +135,7 @@ export class AuthController {
   }
 
   /**
-   * Sets both cookies. The CSRF cookie is deliberately readable by JavaScript —
+   * Sets both cookies. The CSRF cookie is deliberately readable by JavaScript,
    * the browser must echo it in a header for the double-submit check, which is
    * what an attacker on another origin cannot do.
    */

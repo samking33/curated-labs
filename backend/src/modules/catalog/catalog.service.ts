@@ -4,12 +4,12 @@ import { PrismaService } from "../prisma/prisma.service";
 import type { AuthContext } from "../../common/guards/session.guard";
 
 /**
- * Published catalog (§17).
+ * Published catalog.
  *
- * The redaction rule from §28 is enforced by construction: the Prisma `select`
+ * The redaction rule from is enforced by construction: the Prisma `select`
  * clauses below never load architecture issues, canonical threats, or the
  * threat→mitigation mapping. Mitigation *titles* are needed to render step 4's
- * options, so those are returned — the mapping that makes them answers is not.
+ * options, so those are returned; the mapping that makes them answers is not.
  */
 @Injectable()
 export class CatalogService {

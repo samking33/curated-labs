@@ -66,8 +66,12 @@ export function TopNav({
       style={{
         display: "flex",
         alignItems: "center",
+        // Wraps instead of pushing the page sideways: six nav items plus the
+        // points badge are wider than a phone.
+        flexWrap: "wrap",
         gap: tokens.space(6),
-        padding: `${tokens.space(6)} ${tokens.space(8)} ${tokens.space(4)}`,
+        rowGap: tokens.space(3),
+        padding: `${tokens.space(6)} clamp(${tokens.space(4)}, 4vw, ${tokens.space(8)}) ${tokens.space(4)}`,
       }}
     >
       <Link
@@ -79,7 +83,7 @@ export function TopNav({
 
       <nav
         aria-label="Main"
-        style={{ display: "flex", alignItems: "center", gap: tokens.space(1), margin: "0 auto" }}
+        style={{ display: "flex", alignItems: "center", flexWrap: "wrap", justifyContent: "center", gap: tokens.space(1), margin: "0 auto" }}
       >
         {NAV.map((item) => {
           // Prefix match, so /app/catalog/app-security still lights up "Learn".
@@ -155,7 +159,7 @@ function Avatar({ name, url, onClick }: { name: string; url?: string | null; onC
     <button
       type="button"
       title={name}
-      aria-label={`${name} — open settings`}
+      aria-label={`${name}, open settings`}
       onClick={onClick}
       style={{
         border: "none",
@@ -192,7 +196,7 @@ export function HeroHeader({
   today,
   onAskCoach,
   onPrimaryAction,
-  /** Drives both the label and the icon — "Continue lab" vs "Start a lab" are
+  /** Drives both the label and the icon: "Continue lab" vs "Start a lab" are
    *  different actions, not one button with a generic name. */
   hasLabInProgress,
 }: {
@@ -217,7 +221,7 @@ export function HeroHeader({
         alignItems: "flex-end",
         justifyContent: "space-between",
         gap: tokens.space(8),
-        padding: `${tokens.space(4)} ${tokens.space(8)} ${tokens.space(10)}`,
+        padding: `${tokens.space(4)} clamp(${tokens.space(4)}, 4vw, ${tokens.space(8)}) ${tokens.space(10)}`,
         flexWrap: "wrap",
       }}
     >
@@ -241,7 +245,7 @@ export function HeroHeader({
         </h1>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: tokens.space(4) }}>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: tokens.space(4), rowGap: tokens.space(3) }}>
         <div style={{ display: "flex", alignItems: "center", gap: tokens.space(3) }}>
           <span
             style={{
@@ -266,9 +270,7 @@ export function HeroHeader({
 
         <span aria-hidden style={{ width: 1, height: 34, background: tokens.color.borderStrong }} />
 
-        {/* Was "Add Task" — a to-do action this app has never had. It always
-            opened the catalog, so it now says exactly that, and resumes your
-            in-progress lab instead when there is one. */}
+        {/* Opens the catalog, or resumes an in-progress lab when there is one. */}
         <button type="button" onClick={onPrimaryAction} style={pillButton(false)}>
           {hasLabInProgress ? <PlayIcon /> : <PlusIcon />}
           {hasLabInProgress ? "Continue Lab" : "Start a Lab"}

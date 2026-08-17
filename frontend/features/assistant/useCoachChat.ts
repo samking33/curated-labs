@@ -35,7 +35,7 @@ export function useCoachChat() {
         });
         setTurns([...next, { role: "assistant", content: res.reply, degraded: res.degraded }]);
       } catch {
-        // The question stays on screen — only the reply is missing.
+        // The question stays on screen: only the reply is missing.
         setError("Couldn't reach the coach. Try again.");
       } finally {
         setThinking(false);

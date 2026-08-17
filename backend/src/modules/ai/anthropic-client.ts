@@ -14,7 +14,7 @@ export type AnthropicChatRequest = {
   system: string;
   user: string;
   maxTokens: number;
-  /** Absolute epoch ms — the request is aborted if it would run past this. */
+  /** Absolute epoch ms: the request is aborted if it would run past this. */
   deadline?: number;
 };
 
@@ -24,7 +24,7 @@ export type AnthropicChatResponse = {
   latencyMs: number;
   inputTokens?: number;
   outputTokens?: number;
-  /** "max_tokens" means the response was cut off mid-generation — the
+  /** "max_tokens" means the response was cut off mid-generation: the
    *  caller's JSON almost certainly won't parse, and raising maxTokens (not
    *  retrying) is the fix. */
   stopReason?: string;
@@ -34,12 +34,12 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 /**
- * Playground scenario generation only (PLAYGROUND_PROJECT.md) — NIM's
+ * Playground scenario generation only (PLAYGROUND_PROJECT.md). NIM's
  * multi-model fallback chain was unreliable for this specific task (the one
  * model good enough for it routinely timed out under NIM's per-attempt
  * ceiling, and the weaker fallbacks it fell through to couldn't reliably
  * produce valid schema). Every other AI call in the app still goes through
- * NimClient — this class deliberately does not touch that path.
+ * NimClient: this class deliberately does not touch that path.
  */
 @Injectable()
 export class AnthropicClient {
@@ -61,7 +61,7 @@ export class AnthropicClient {
     const started = Date.now();
     let lastError: Error = new AnthropicUnavailableError("Anthropic request failed.", "UNKNOWN");
 
-    // One retry on a transient failure only — a single scenario-generation
+    // One retry on a transient failure only: a single scenario-generation
     // call already costs real money and a couple of minutes; anything more
     // belongs to the caller's own repair-attempt loop, not this client.
     for (let attempt = 0; attempt <= 1; attempt++) {

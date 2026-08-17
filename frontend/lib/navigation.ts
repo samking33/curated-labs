@@ -14,7 +14,7 @@ import { useRouter as useNextRouter } from "next/navigation";
  * fires the navigation is essentially over), and mutating the object returned
  * by `useRouter()` doesn't stick (its context value isn't a stable object
  * across renders, so the patch is silently discarded on the next one).
- * Wrapping the hook has neither problem — it's called fresh each render by
+ * Wrapping the hook has neither problem: it's called fresh each render by
  * definition, so there's no stale reference to lose.
  *
  * `<Link>`-based navigation doesn't go through this at all; RouteProgress
@@ -26,7 +26,7 @@ export function useRouter() {
   // Memoised on `router`: callers put this in useCallback/useEffect dep arrays
   // (Dashboard does), so returning a fresh object each render would silently
   // defeat their memoisation. Methods are copied explicitly rather than spread
-  // — a spread only picks up own enumerable properties and would quietly drop
+  //: a spread only picks up own enumerable properties and would quietly drop
   // anything Next exposes on a prototype.
   return useMemo(
     () => ({

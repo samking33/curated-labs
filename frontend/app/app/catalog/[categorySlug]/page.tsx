@@ -11,11 +11,16 @@ import { LabGrid } from "@/features/catalog/LabGrid";
 export default async function CategoryPage({ params }: { params: Promise<{ categorySlug: string }> }) {
   const { categorySlug } = await params;
   const cookie = (await headers()).get("cookie") ?? undefined;
-  const [me, labs] = await Promise.all([
+  const [me, labs, categories] = await Promise.all([
     getMe(cookie),
     serverApi<LabSummary[]>(`/labs?category=${encodeURIComponent(categorySlug)}`, cookie),
+    serverApi<{ slug: string; name: string }[]>("/lab-categories", cookie),
   ]);
-  if (!labs) notFound();
+  // An unknown category returns an empty lab list, not null, so the category
+  // itself has to be checked: otherwise a typo renders a page titled with
+  // whatever the visitor put in the URL.
+  const category = categories?.find((c) => c.slug === categorySlug);
+  if (!labs || !category) notFound();
 
   return (
     <>
@@ -25,7 +30,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
           ← All categories
         </Link>
         <h1 style={{ fontSize: tokens.size.xxl, marginTop: tokens.space(2) }}>
-          {labs[0]?.category.name ?? categorySlug}
+          {category.name}
         </h1>
         {labs.length === 0 ? (
           <p style={{ color: tokens.color.textMuted }}>No published labs in this category yet.</p>

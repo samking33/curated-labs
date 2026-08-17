@@ -34,13 +34,13 @@ type SubmitOptions = { idempotencyKey?: string };
 const SINGLE = "single";
 
 /**
- * The guided lab workflow (§8).
+ * The guided lab workflow.
  *
  * Two invariants drive the whole class:
  *   1. The learner's answer is committed before any AI call. A NIM outage then
- *      degrades coaching but can never destroy work (§16, §30).
- *   2. Correctness is computed here, from the database answer key — the model
- *      only ever explains a verdict we already reached (§8 step 4).
+ *      degrades coaching but can never destroy work.
+ *   2. Correctness is computed here, from the database answer key: the model
+ *      only ever explains a verdict we already reached.
  */
 @Injectable()
 export class AttemptsService {
@@ -53,7 +53,7 @@ export class AttemptsService {
   ) {}
 
   /** Awards candidates for this attempt and returns {pointsAwarded, cheers}
-   *  ready to splice into a StepResult. Never awards on a replayed submit —
+   *  ready to splice into a StepResult. Never awards on a replayed submit:
    *  callers only reach this from the non-replayed branch. */
   private async scoreAndCheer(
     attempt: { userId: string; organizationId: string | null; id: string },
@@ -82,7 +82,7 @@ export class AttemptsService {
     });
     if (!lab) throw new NotFoundException("Lab not found.");
 
-    // Resume rather than fork: §16 requires learners can leave and come back.
+    // Resume rather than fork, so a learner can leave and come back.
     const existing = await this.prisma.labAttempt.findFirst({
       where: { userId: user.userId, labId: lab.id, status: "in_progress" },
       orderBy: { startedAt: "desc" },
@@ -131,7 +131,7 @@ export class AttemptsService {
     // Steps 3 and 4 are built from the canonical threat list, so a learner who
     // reloads mid-lab needs it back or those steps render empty and the lab
     // becomes unfinishable. Only ever sent once the attempt has actually earned
-    // the reveal — never on the strength of the client asking.
+    // the reveal: never on the strength of the client asking.
     return { ...attempt, revealedThreats: await this.revealedThreatsFor(attempt) };
   }
 
@@ -187,7 +187,7 @@ export class AttemptsService {
     answer: unknown,
     options: SubmitOptions,
   ) {
-    // Idempotency (§25): a retried POST returns the original row rather than
+    // Idempotency: a retried POST returns the original row rather than
     // duplicating the answer and spending another AI call.
     if (options.idempotencyKey) {
       const prior = await this.prisma.labStepSubmission.findUnique({
@@ -254,7 +254,7 @@ export class AttemptsService {
 
     const ai = await this.ai.architectureFeedback({ answer, issues, labId: attempt.labId });
 
-    // Hints for what they missed — the nudge, never the answer. The issue title
+    // Hints for what they missed: the nudge, never the answer. The issue title
     // and description stay server-side; only the curated hint text is sent.
     const missedIds = new Set(
       ((ai.feedback as { missedIssueIds?: string[] } | null)?.missedIssueIds ?? []) as string[],
@@ -269,7 +269,7 @@ export class AttemptsService {
     };
     const done = await this.finish(attemptId, submission.id, "architecture_issues", ai, deterministic);
 
-    // Flat participation award — this step is explicitly not graded (§8), so
+    // Flat participation award: this step is explicitly not graded, so
     // there is nothing to cheer about, only credit for having done it.
     const { pointsAwarded } = await this.scoreAndCheer(attempt, [
       { reason: "architecture_submitted", refId: SINGLE, amount: POINTS.architecture_submitted },
@@ -293,7 +293,7 @@ export class AttemptsService {
 
   /**
    * Where untrusted input enters. The canonical set is derived from the DFD
-   * (deriveAttackSurfaces) rather than authored per lab — an attack surface is
+   * (deriveAttackSurfaces) rather than authored per lab: an attack surface is
    * a property of the architecture, so computing it keeps the answer key
    * correct for generated scenarios and for any lab whose diagram is edited.
    *
@@ -343,7 +343,7 @@ export class AttemptsService {
       aiFeedback: ai.feedback,
       aiStatus: ai.status,
       deterministicResult: graded,
-      // Shown straight after grading so the learner can compare — this is the
+      // Shown straight after grading so the learner can compare: this is the
       // teaching moment for the step, and nothing here is a hidden answer key
       // for a later one.
       revealedAttackSurfaces: canonical,
@@ -385,7 +385,7 @@ export class AttemptsService {
 
     const ai = await this.ai.threatMatching({ answer, canonical, labId: attempt.labId });
 
-    // Persist matches with real canonical ids only — AiService has already
+    // Persist matches with real canonical ids only. AiService has already
     // dropped anything the model invented.
     const matched = ai.matches ?? [];
     if (matched.length) {
@@ -400,8 +400,8 @@ export class AttemptsService {
       });
     }
 
-    // §8 step 2: after the configured number of tries, show the answer set.
-    // The decision is ours, not the model's — it cannot reveal answers early.
+    // step 2: after the configured number of tries, show the answer set.
+    // The decision is ours, not the model's: it cannot reveal answers early.
     const reveal = submission.attemptNumber >= THREAT_RETRY_LIMIT;
     const matchedIds = new Set(matched.map((m) => m.canonicalThreatId));
     const allMatched = canonical.length > 0 && canonical.every((t) => matchedIds.has(t.id));
@@ -418,7 +418,7 @@ export class AttemptsService {
       advanceTo,
     );
 
-    // One award per matched canonical threat, deduped per attempt — matching
+    // One award per matched canonical threat, deduped per attempt: matching
     // the same threat again on a retry earns nothing further, only threats
     // that are newly matched on THIS submission pay out.
     const candidates: PointCandidate[] = [...matchedIds].map((id) => ({
@@ -514,7 +514,7 @@ export class AttemptsService {
     const { submission, replayed } = await this.recordSubmission(attemptId, "mitigations", answer, options);
     if (replayed) return replayResult(submission, attempt.currentStep);
 
-    // §8 step 4: correctness is deterministic and computed BEFORE the AI runs.
+    // step 4: correctness is deterministic and computed BEFORE the AI runs.
     // The model explains this verdict; it never produces it.
     const deterministic = gradeMitigations(answer.pairings, answerKey);
     const graded = deterministic.pairings;
@@ -568,7 +568,7 @@ export class AttemptsService {
     const ai = await this.ai.releaseFeedback({ answer, guidance, priorSubmissions, labId: attempt.labId });
 
     // The headline is fixed copy keyed on a deterministic alignment check,
-    // not something the model writes — a canned string is more reliable
+    // not something the model writes: a canned string is more reliable
     // than hoping every model call reproduces it verbatim. It sits beside
     // the model's own (deliberately non-judgmental) reasoning, not in place
     // of it: guidance.recommendedDecision is one defensible answer, not the
@@ -651,8 +651,8 @@ export class AttemptsService {
   }
 
   /**
-   * Organization progress (§11). Department managers see only their own
-   * departments — the filter is applied here rather than trusted from a query
+   * Organization progress. Department managers see only their own
+   * departments: the filter is applied here rather than trusted from a query
    * parameter.
    */
   async progressForOrganization(user: AuthContext, organizationId: string, departmentId?: string) {
@@ -721,7 +721,7 @@ export class AttemptsService {
       deterministicResult: submission.deterministicResultJson ?? null,
       revealedAttackSurfaces: null,
     revealedThreats: null,
-      // A replay is a retried request for an answer already scored — the
+      // A replay is a retried request for an answer already scored: the
       // points and cheer already reached the client on the original response.
       pointsAwarded: 0,
       cheers: [],

@@ -4,7 +4,7 @@ import { Public } from "../../common/decorators/public.decorator";
 import { PrismaService } from "../prisma/prisma.service";
 import { NimClient } from "../ai/nim-client";
 
-/** §20 health checks. */
+/** health checks. */
 @Controller("health")
 export class HealthController {
   constructor(
@@ -24,7 +24,7 @@ export class HealthController {
   async ready() {
     const db = await this.check(() => this.prisma.$queryRaw`SELECT 1`);
     // NIM being down degrades coaching but must not take the API out of
-    // rotation — learners can still work and answers still persist (§20).
+    // rotation: learners can still work and answers still persist.
     return { status: db.ok ? "ok" : "degraded", checks: { database: db } };
   }
 

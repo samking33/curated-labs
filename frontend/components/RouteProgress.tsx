@@ -9,14 +9,13 @@ const MAX_STUCK_MS = 4000;
 /**
  * A top progress bar that fires on every client-side page navigation.
  *
- * The complaint this fixes: clicking anything felt dead — no button had a
- * press state, and a route change gave zero feedback until the new page
- * simply appeared a few seconds later.
+ * Without it a route change gives no feedback at all until the new page
+ * appears a few seconds later.
  *
- * Two earlier approaches to detecting "navigation requested" didn't hold up:
+ * Two simpler ways of detecting "navigation requested" do not work here:
  *   - Patching `history.pushState` detects the wrong moment. App Router
  *     defers actually writing the history entry until the destination route
- *     has already fetched and is ready to commit — with no per-route
+ *     has already fetched and is ready to commit: with no per-route
  *     `loading.tsx` in this app, nothing separates those two moments, so the
  *     bar appeared already at 100% and vanished within a frame.
  *   - Mutating `.push`/`.replace` on the object `useRouter()` returns doesn't
@@ -24,14 +23,14 @@ const MAX_STUCK_MS = 4000;
  *     patch is silently gone by the next one.
  *
  * What's left, and what actually works: almost every navigation in this app
- * is a real `<Link href>`, which renders a real `<a>` — a capturing click
+ * is a real `<Link href>`, which renders a real `<a>`: a capturing click
  * listener on the anchor is a DOM fact, not a guess about Next internals. The
  * one place that calls `router.push()` from a button (Dashboard.tsx) goes
  * through `lib/navigation.ts`'s wrapped `useRouter` instead, which dispatches
  * the same `cl:navstart` event this component listens for.
  *
  * "Finished" is the pathname or search params actually changing underneath
- * this component — that's this component re-rendering with the destination
+ * this component: that's this component re-rendering with the destination
  * already committed, not a guess at how long the fetch might take.
  */
 export function RouteProgress() {
@@ -50,13 +49,13 @@ export function RouteProgress() {
     if (hide.current) clearTimeout(hide.current);
     setVisible(true);
     setProgress(15);
-    // Creeps toward 85% and stalls there — it never claims to be finished on
+    // Creeps toward 85% and stalls there: it never claims to be finished on
     // its own; only the pathname/searchParams effect below does that.
     creep.current = setInterval(() => {
       setProgress((p) => (p >= 85 ? p : p + (85 - p) * 0.15));
     }, 150);
-    // Defense in depth: if the destination never lands — a navigation this
-    // component's assumptions didn't anticipate — don't leave the bar stuck.
+    // Defence in depth: if the destination never lands, because of a
+    // navigation this component does not anticipate, do not leave the bar stuck.
     stuckGuard.current = setTimeout(finish, MAX_STUCK_MS);
   }
 

@@ -1,9 +1,9 @@
 /** Tunables referenced by both sides. */
 
-/** §8 step 2: learner gets this many tries before the canonical set is shown. */
+/** step 2: learner gets this many tries before the canonical set is shown. */
 export const THREAT_RETRY_LIMIT = 2;
 
-/** §12 session cookie. */
+/** session cookie. */
 export const SESSION_COOKIE = "cl_session";
 export const CSRF_COOKIE = "cl_csrf";
 export const CSRF_HEADER = "x-csrf-token";

@@ -12,7 +12,7 @@ export function LeaderboardView({
   orgName,
 }: {
   global: LeaderboardResponse;
-  /** Null when the learner isn't in an organization — the tab doesn't render. */
+  /** Null when the learner isn't in an organization: the tab doesn't render. */
   organization: LeaderboardResponse | null;
   orgName?: string;
 }) {
@@ -46,7 +46,7 @@ export function LeaderboardView({
 
       {board.entries.length === 0 ? (
         <p style={{ color: tokens.color.textMuted }}>
-          No one has earned points here yet — be the first to finish a step.
+          No one has earned points here yet. Be the first to finish a step.
         </p>
       ) : (
         <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: tokens.space(2) }}>

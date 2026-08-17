@@ -5,7 +5,7 @@ import { getMe } from "@/lib/session";
 import { serverApi } from "@/lib/server-api";
 import { Dashboard } from "@/features/dashboard/Dashboard";
 
-export const metadata = { title: "Dashboard — Securacy" };
+export const metadata = { title: "Dashboard · Securacy" };
 
 type Member = { name: string; avatarUrl: string | null };
 
@@ -29,8 +29,8 @@ export default async function AppHome() {
    * Activity bucketed by month for each range the selector offers. Computed
    * once here so switching range is instant and needs no round trip.
    *
-   * `now` is read once, on the server, and everything date-shaped derives from
-   * it — including the `today` passed to the client, so SSR and hydration
+   * `now` is read once, on the server, and everything date-shaped derives
+   * from it, including the `today` passed to the client, so SSR and hydration
    * cannot disagree.
    */
   const now = new Date();
@@ -60,7 +60,7 @@ export default async function AppHome() {
     }
   }
 
-  // Computed here, in a server component, and passed down — see HeroHeader.
+  // Computed here, in a server component, and passed down: see HeroHeader.
   const today = {
     day: now.getDate(),
     weekday: now.toLocaleDateString("en-GB", { weekday: "short" }),
@@ -76,7 +76,7 @@ export default async function AppHome() {
       learners={learners}
       today={today}
       points={myPoints?.total ?? null}
-      // Frozen server time, not a live clock — see lib/format.ts on why a
+      // Frozen server time, not a live clock: see lib/format.ts on why a
       // client-side `Date.now()` read here would risk a hydration mismatch.
       nowIso={now.toISOString()}
     />

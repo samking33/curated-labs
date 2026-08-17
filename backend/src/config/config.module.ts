@@ -3,7 +3,7 @@ import { CONFIG, loadConfig } from "./index";
 
 /**
  * Global so every feature module can inject CONFIG without importing it.
- * Parsed once at boot — loadConfig throws on invalid configuration, which is
+ * Parsed once at boot: loadConfig throws on invalid configuration, which is
  * what turns a missing SESSION_SECRET into a failed start instead of a hole.
  */
 @Global()

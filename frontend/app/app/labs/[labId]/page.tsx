@@ -12,8 +12,8 @@ export default async function LabPage({ params }: { params: Promise<{ labId: str
   const me = await getMe(cookie);
   if (!me) redirect(`/login?returnTo=/app/labs/${labId}`);
 
-  // This payload carries no canonical threats or answer keys — the API's
-  // selection cannot produce them (§28).
+  // This payload carries no canonical threats or answer keys: the API's
+  // selection cannot produce them.
   const lab = await serverApi<LabDetail>(`/labs/${labId}`, cookie);
   if (!lab) notFound();
 

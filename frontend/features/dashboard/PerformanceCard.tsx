@@ -209,12 +209,9 @@ export function PerformanceCard({
 }
 
 /**
- * Bottom promo panel: stacked avatars over a dotted hemisphere.
- *
- * This used to say "Connect With Learners Worldwide!" and link to Settings —
- * there has never been a messaging or social feature in this app, so that
- * promise had nothing behind it. The leaderboard is the one place that's
- * genuinely about other learners, so the panel now points there and says so.
+ * Bottom promo panel: stacked avatars over a dotted hemisphere. Points at the
+ * leaderboard, the one place in the app that is genuinely about other
+ * learners. There is no messaging or social feature to promise here.
  */
 function ConnectPanel({
   learners,

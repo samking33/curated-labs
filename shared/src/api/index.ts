@@ -8,7 +8,7 @@ import {
 } from "../schemas/lab";
 import { ORG_ROLES, PLATFORM_ROLES } from "../rbac/index";
 
-/** Wire contracts shared by the API and the web app (PROJECT.md §11). */
+/** Wire contracts shared by the API and the web app (PROJECT.md). */
 
 export const API_PREFIX = "/api/v1";
 
@@ -24,7 +24,7 @@ export const errorCodeSchema = z.enum([
 ]);
 export type ErrorCode = z.infer<typeof errorCodeSchema>;
 
-/** §25: one error envelope everywhere, always with a request id. */
+/** One error envelope everywhere, always with a request id. */
 export const apiErrorSchema = z.object({
   error: z.object({
     code: errorCodeSchema,
@@ -114,7 +114,7 @@ export type LabSummary = z.infer<typeof labSummarySchema>;
 
 /**
  * Learner-facing lab detail. Deliberately has no field for canonical threats,
- * architecture issues or mitigation answer keys — §28 forbids shipping them
+ * architecture issues or mitigation answer keys: forbids shipping them
  * before reveal state, and the type makes that a compile error, not a review
  * comment. Revealed content arrives separately via the threats step response.
  */
@@ -132,10 +132,8 @@ export type LabDetail = z.infer<typeof labDetailSchema>;
 /* ------------------------------------------------------------- attempts */
 
 /**
- * Free-text answers are trimmed before length is checked, so whitespace can
- * never satisfy a minimum. Reported from real use as "I entered two threats
- * and kept the next one blank. It accepted a blank threat" — the UI drops
- * empty rows, but the API itself would have taken a single space.
+ * Trim before checking length, so a string of spaces cannot satisfy a minimum.
+ * The UI drops empty rows, but the API must not depend on it.
  */
 const answerText = (max: number) => z.string().trim().min(1).max(max);
 
@@ -146,7 +144,7 @@ export const architectureIssuesSubmissionSchema = z.object({
 });
 
 /**
- * Attack surfaces are picked off the diagram, not typed — the learner selects
+ * Attack surfaces are picked off the diagram, not typed: the learner selects
  * the nodes and flows where untrusted input enters, and explains why. Grading
  * is on the selection; the prose is what the coach responds to.
  */
@@ -191,7 +189,7 @@ export const stepResultSchema = z.object({
   submissionId: z.string(),
   attemptNumber: z.number().int(),
   currentStep: labStepSchema,
-  /** Null when NIM was unavailable — the answer is still saved. §16 UX rule. */
+  /** Null when NIM was unavailable: the answer is still saved. UX rule. */
   aiFeedback: z.unknown().nullable(),
   aiStatus: z.enum(["ok", "unavailable", "invalid"]),
   deterministicResult: z.unknown().nullable(),
@@ -208,7 +206,7 @@ export const stepResultSchema = z.object({
     )
     .nullable()
     .default(null),
-  /** Populated only once the reveal rules in §8 step 2 allow it. */
+  /** Populated only once the reveal rules in step 2 allow it. */
   revealedThreats: z
     .array(
       z.object({
@@ -222,7 +220,7 @@ export const stepResultSchema = z.object({
     )
     .nullable()
     .default(null),
-  /** 0 on a replayed idempotent submission — points are never awarded twice. */
+  /** 0 on a replayed idempotent submission: points are never awarded twice. */
   pointsAwarded: z.number().int().default(0),
   /** Short, pre-written lines for whatever this submission got right. Capped
    *  by the caller so one big correct step doesn't wall the learner in toasts. */

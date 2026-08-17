@@ -46,7 +46,7 @@ describe("loadAction", () => {
 
 describe("embedUrl", () => {
   // chrome=0, not chromeless=1/edit=0, is what the vendored v31.1.8 build
-  // actually reads to lock the graph read-only — see the comment on
+  // actually reads to lock the graph read-only: see the comment on
   // embedUrl() for the grep evidence from the vendored bundle.
   it("adds chrome=0 for view mode", () => {
     const url = embedUrl("view");
@@ -59,7 +59,7 @@ describe("embedUrl", () => {
   });
 
   // addEmbedButtons (grepped from app.min.js) gates its floating Save/Exit
-  // buttons on embed=1 alone, not on chromeless — present in both modes
+  // buttons on embed=1 alone, not on chromeless: present in both modes
   // unless explicitly suppressed. This app never uses them.
   it("suppresses the floating Save/Exit embed buttons in both modes", () => {
     expect(embedUrl("view")).toContain("noSaveBtn=1");
@@ -71,8 +71,8 @@ describe("embedUrl", () => {
   // clibs=U<url> is how the vendored build's App.prototype.restoreLibraries
   // auto-opens a URL-backed custom shape library at startup (see the
   // comment on embedUrl() for the grep evidence). Only needed in edit mode
-  // — restoreLibraries is a no-op without a sidebar, which view mode lacks.
-  // The URL must be absolute (the caller's origin) — a relative path fails
+  //: restoreLibraries is a no-op without a sidebar, which view mode lacks.
+  // The URL must be absolute (the caller's origin): a relative path fails
   // the vendored build's isCorsEnabledForUrl check and gets routed through
   // a proxy servlet this static deployment doesn't have (see the comment
   // on embedUrl() for how that was confirmed live against a real 404).
@@ -93,8 +93,8 @@ describe("embedUrl", () => {
   });
 
   // Note: a plain `.not.toContain("libs=")` would be a false negative here
-  // — "clibs=" (always present in edit mode) contains "libs=" as a
-  // substring — so this parses the query string instead of substring-
+  //: "clibs=" (always present in edit mode) contains "libs=" as a
+  // substring: so this parses the query string instead of substring-
   // matching it.
   it("omits libs= when no provider is present", () => {
     const url = embedUrl("edit", "http://localhost:3000", []);
@@ -109,13 +109,13 @@ describe("embedUrl", () => {
     expect(params.get("libs")).toBe("aws4");
   });
 
-  // GCP has no queue/pub-sub icon in the gcp3 stencil library — the gcp2
+  // GCP has no queue/pub-sub icon in the gcp3 stencil library: the gcp2
   // library's embedded-image style covers that type instead (see the
   // findings doc's style-strings table). Both must load together so the
   // sidebar's GCP section covers all 4 infra node types.
   //
   // Note: checked via URLSearchParams rather than `toContain("libs=gcp3;gcp2")`
-  // — URLSearchParams percent-encodes `;` as `%3B` in the raw query string
+  //. URLSearchParams percent-encodes `;` as `%3B` in the raw query string
   // (the findings doc confirms the vendored app's single decodeURIComponent
   // pass before `.split(";")` handles that fine at runtime), so a literal
   // `;` substring check on the raw URL would never match.

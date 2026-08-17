@@ -1,7 +1,7 @@
 /**
- * Centralized design tokens (§16).
+ * Centralized design tokens.
  *
- * Feature code must never hard-code a colour or spacing value — it reads from
+ * Feature code must never hard-code a colour or spacing value: it reads from
  * here, so the whole app re-skins by editing this file. Keys are stable; only
  * the values changed when the product owner supplied the visual direction.
  */
@@ -21,7 +21,7 @@ export const tokens = {
     /*
      * Securacy green, straight from the supplied logo.
      *
-     * It is vivid enough that white text on it measures 2.0:1 — unreadable, and
+     * It is vivid enough that white text on it measures 2.0:1: unreadable, and
      * below even the 3:1 large-text floor. Near-black on it measures 9.2:1, so
      * filled controls use dark ink and keep the real brand colour instead of a
      * muddied "accessible" substitute.
@@ -29,7 +29,7 @@ export const tokens = {
     accent: "#0BD400",
     /** Text and icons ON an accent fill. */
     accentText: "#0A2A0B",
-    /** Accent-COLOURED text on a light surface — the fill is far too light. */
+    /** Accent-COLOURED text on a light surface: the fill is far too light. */
     accentInk: "#0E7A1B",
     accentSoft: "#E2FBE0",
     /** Logo gradient stops, for decorative use only (no text sits on these). */

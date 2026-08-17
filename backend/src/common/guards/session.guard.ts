@@ -14,9 +14,9 @@ export type AuthContext = SessionUser & {
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
- * Global, deny-by-default authentication (§13). A route is protected unless it
+ * Global, deny-by-default authentication. A route is protected unless it
  * carries @Public(), so a new endpoint added without thinking is closed rather
- * than open. Also enforces CSRF on cookie-authenticated mutations (§19).
+ * than open. Also enforces CSRF on cookie-authenticated mutations.
  */
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -61,7 +61,7 @@ export class SessionGuard implements CanActivate {
 /**
  * Binds the user's real memberships to an org id. Callers pass the org from the
  * route; membership is looked up here, so a forged organizationId resolves to
- * "no role" instead of granting access (§13).
+ * "no role" instead of granting access.
  */
 export function withAccess(user: SessionUser): AuthContext {
   return {

@@ -23,13 +23,8 @@ export type Segment = {
 const TRACK_END = 168;
 
 /**
- * Spread the checkpoints evenly along the track.
- *
- * This was a hardcoded [0, 48, 96, 150] for exactly four steps. Adding a
- * fifth checkpoint sent it off the end of the arc — the fallback put it at
- * (4/5)*360 = 288 degrees on a track that stops at 168 — so it is derived
- * from the count now and cannot drift out of range again when a step is
- * added or removed.
+ * Spread the checkpoints evenly along the track. Derived from the count so
+ * that adding or removing a step cannot push one past TRACK_END.
  */
 function segmentDeg(index: number, count: number): number {
   return count <= 1 ? 0 : (index / (count - 1)) * TRACK_END;
@@ -79,17 +74,17 @@ export function WeeklyProgressCard({
   timerLabel,
   onOpenLab,
 }: {
-  /** done/current/todo per day of the week — real, derived from attempt
-   *  history. There is no per-day breakdown behind it, so the strip is a
-   *  read-only status display, not a selector into different data. */
+  /** done/current/todo per day of the week, derived from attempt history.
+   *  There is no per-day breakdown behind it, so the strip is a read-only
+   *  status display rather than a selector. */
   days: DayState[];
   todayIndex: number;
   completed: number;
   total: number;
   segments: Segment[];
   currentStep?: string;
-  /** "started 2 hours ago", or null with no lab in progress. Real, derived
-   *  from the attempt's actual startedAt — not a client-side ticking clock. */
+  /** "started 2 hours ago", or null with no lab in progress. Derived from
+   *  the attempt's startedAt, not a client-side ticking clock. */
   startedAgo: string | null;
   timerLabel: string;
   onOpenLab?: () => void;
@@ -98,10 +93,8 @@ export function WeeklyProgressCard({
 
   return (
     <section style={{ ...card(), padding: tokens.space(5) }}>
-      {/* Day strip: status only. Not a selector — there is no per-day view for
-          it to switch to. It stopped *looking* clickable a while back, but it
-          was still read as one ("I cannot click on other days"), so it now
-          says what it is rather than leaving people to infer it. */}
+      {/* Day strip: status only, and labelled as such. There is no per-day
+          view for it to switch to. */}
       <div
         style={{
           fontSize: tokens.size.xs,
@@ -122,8 +115,10 @@ export function WeeklyProgressCard({
                 aria-label={DAY_NAMES[i]}
                 aria-current={active ? "date" : undefined}
                 style={{
-                  width: 42,
-                  height: 42,
+                  // Fixed 42px circles overflow a phone-width card; cap instead.
+                  width: "100%",
+                  maxWidth: 42,
+                  aspectRatio: "1",
                   borderRadius: "50%",
                   display: "grid",
                   placeItems: "center",
@@ -251,7 +246,7 @@ export function WeeklyProgressCard({
 
           {/*
            * Segment labels ride between the two rings. Only the live one is
-           * clickable — step order is enforced server-side, so the other
+           * clickable: step order is enforced server-side, so the other
            * three cannot lead anywhere different from the one action
            * ("resume the lab"). Drawing all four as buttons implied you could
            * jump straight to e.g. Mitigations, which was never true.

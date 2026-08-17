@@ -19,9 +19,16 @@ type OrgProgress = {
   }[];
 };
 
-/** §11: operational visibility for admins. Explicitly not a formal report. */
-export default async function OrgPage({ params }: { params: Promise<{ orgSlug: string }> }) {
+/** Operational visibility for admins. Explicitly not a formal report. */
+export default async function OrgPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orgSlug: string }>;
+  searchParams: Promise<{ departmentId?: string }>;
+}) {
   const { orgSlug } = await params;
+  const { departmentId } = await searchParams;
   const cookie = (await headers()).get("cookie") ?? undefined;
   const me = await getMe(cookie);
   if (!me) redirect(`/login?returnTo=/app/org/${orgSlug}`);
@@ -29,7 +36,13 @@ export default async function OrgPage({ params }: { params: Promise<{ orgSlug: s
   const org = me.organizations.find((o) => o.slug === orgSlug);
   if (!org) notFound();
 
-  const progress = await serverApi<OrgProgress>(`/organizations/${org.id}/progress`, cookie);
+  const [progress, departments] = await Promise.all([
+    serverApi<OrgProgress>(
+      `/organizations/${org.id}/progress${departmentId ? `?departmentId=${encodeURIComponent(departmentId)}` : ""}`,
+      cookie,
+    ),
+    serverApi<{ id: string; name: string }[]>(`/organizations/${org.id}/departments`, cookie),
+  ]);
 
   return (
     <>
@@ -45,6 +58,16 @@ export default async function OrgPage({ params }: { params: Promise<{ orgSlug: s
           <p style={{ color: tokens.color.textMuted }}>You do not have access to organization activity.</p>
         ) : (
           <>
+            {departments && departments.length > 0 && (
+              <div style={{ display: "flex", gap: tokens.space(2), flexWrap: "wrap", marginBottom: tokens.space(4) }}>
+                <Filter href={`/app/org/${orgSlug}`} active={!departmentId}>Everyone</Filter>
+                {departments.map((d) => (
+                  <Filter key={d.id} href={`/app/org/${orgSlug}?departmentId=${d.id}`} active={departmentId === d.id}>
+                    {d.name}
+                  </Filter>
+                ))}
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: tokens.space(3) }}>
               <Stat label="Attempts" value={progress.totals.attempts} />
               <Stat label="Completed" value={progress.totals.completed} />
@@ -92,6 +115,25 @@ function Stat({ label, value }: { label: string; value: number }) {
       <div style={{ fontSize: tokens.size.xxl, fontWeight: 600 }}>{value}</div>
       <div style={{ fontSize: tokens.size.sm, color: tokens.color.textMuted }}>{label}</div>
     </div>
+  );
+}
+function Filter({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      style={{
+        padding: `${tokens.space(1)} ${tokens.space(3)}`,
+        borderRadius: tokens.radius.pill,
+        border: `1px solid ${active ? tokens.color.accent : tokens.color.border}`,
+        background: active ? tokens.color.accentSoft : tokens.color.surface,
+        color: active ? tokens.color.accent : tokens.color.textMuted,
+        fontSize: tokens.size.sm,
+        textDecoration: "none",
+      }}
+    >
+      {children}
+    </Link>
   );
 }
 function Th({ children }: { children: React.ReactNode }) {

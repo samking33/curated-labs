@@ -6,14 +6,14 @@
  *
  * This replaced a hand-drawn approximation built before the real assets
  * arrived. Two variants ship because the wordmark is dark on light and white on
- * dark — recolouring one variant with CSS is not possible, the text is baked in.
+ * dark: recolouring one variant with CSS is not possible, the text is baked in.
  */
 
 /** Native aspect of both files (613.36 × 208.12). */
 const RATIO = 208.12 / 613.36;
 
 export const BRAND = {
-  /** Logo green. Vivid — see accentText before putting text on it. */
+  /** Logo green. Vivid: see accentText before putting text on it. */
   green: "#0bd400",
   gradient: ["#fe00d4", "#009ffe", "#00f496", "#00fc1e"] as const,
 } as const;

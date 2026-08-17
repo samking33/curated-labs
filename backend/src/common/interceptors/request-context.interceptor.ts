@@ -5,8 +5,8 @@ import { tap } from "rxjs/operators";
 import type { Observable } from "rxjs";
 
 /**
- * Assigns a request id and emits the structured access log required by §20:
- * request id, user, org, route, status, duration. Never logs bodies — answers
+ * Assigns a request id and emits the structured access log:
+ * request id, user, org, route, status, duration. Never logs bodies: answers
  * and tokens both live there.
  */
 @Injectable()

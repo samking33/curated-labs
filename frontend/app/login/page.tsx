@@ -2,9 +2,9 @@ import { tokens } from "@/lib/tokens";
 import { SecuracyLockup } from "@/features/brand/SecuracyLogo";
 import { DevLogin } from "@/features/auth/DevLogin";
 
-export const metadata = { title: "Sign in — Securacy" };
+export const metadata = { title: "Sign in · Securacy" };
 
-/** §12: Google only. There is deliberately no password field anywhere. */
+/** Google only. There is deliberately no password field anywhere. */
 export default async function LoginPage({
   searchParams,
 }: {

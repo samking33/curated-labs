@@ -12,7 +12,7 @@ import {
 /**
  * Custom Playground contracts (PLAYGROUND_PROJECT.md).
  *
- * A playground scenario is AI-generated, learner-owned practice content — it
+ * A playground scenario is AI-generated, learner-owned practice content: it
  * never touches the curated catalog, the leaderboard, or org progress
  * reporting. The validation strategy below deliberately reuses the curated
  * seed-file machinery rather than inventing a second one: an AI-authored
@@ -22,7 +22,7 @@ import {
  */
 
 /** Request body for POST /playground/sessions/:sessionId/scenarios.
- *  `prompt` is UNTRUSTED learner text — capped here so it can never dominate
+ *  `prompt` is UNTRUSTED learner text: capped here so it can never dominate
  *  the generator prompt regardless of what the controller does with it. */
 export const generateScenarioRequestSchema = z.object({
   prompt: z.string().min(20).max(2000),
@@ -44,7 +44,7 @@ export type GenerationJob = z.infer<typeof generationJobSchema>;
 
 /**
  * What the generator model must return: `labSeedSchema` minus the routing
- * metadata the platform assigns (category, slug, version) — the model
+ * metadata the platform assigns (category, slug, version): the model
  * authors content, not catalog placement.
  */
 export const playgroundScenarioDraftSchema = labSeedSchema.omit({ category: true }).extend({
@@ -57,7 +57,7 @@ export type PlaygroundScenarioDraft = z.infer<typeof playgroundScenarioDraftSche
  * a real UUID minted for every author-supplied key. UUIDs are required
  * because the learner-facing submission schemas
  * (`prioritizationSubmissionSchema`, `mitigationsSubmissionSchema`) enforce
- * `z.string().uuid()` on the ids the learner posts back — a generated scenario
+ * `z.string().uuid()` on the ids the learner posts back: a generated scenario
  * has to speak the same id dialect as a curated one downstream.
  *
  * Re-parsed on every read despite being written once: the column is JSONB, so
@@ -124,7 +124,7 @@ export type PlaygroundScenarioContent = z.infer<typeof playgroundScenarioContent
 /* -------------------------------------------------------- generation gate */
 
 /** Size bounds. These are what keep every DOWNSTREAM coaching prompt inside
- *  AI_MAX_INPUT_TOKENS — an unbounded DFD would blow the budget on all five
+ *  AI_MAX_INPUT_TOKENS: an unbounded DFD would blow the budget on all five
  *  workflow steps, not just generation. */
 export const SCENARIO_BOUNDS = {
   nodes: [4, 25],
@@ -136,10 +136,10 @@ export const SCENARIO_BOUNDS = {
 } as const;
 
 /**
- * The generated-content gate. Wraps `validateSeedReferences` — which already
+ * The generated-content gate. Wraps `validateSeedReferences`: which already
  * checks unknown node/edge references on issues and threats, unknown
  * threat/mitigation keys, that every threat has at least one mitigation, and
- * duplicate keys — and adds only the bounds a hand-written curated seed never
+ * duplicate keys: and adds only the bounds a hand-written curated seed never
  * violates but an unattended model can.
  *
  * `sentinel` is a distinctive phrase from the generator's system prompt; if it

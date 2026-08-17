@@ -14,8 +14,8 @@ const STATUS_TO_CODE: Record<number, ErrorCode> = {
 };
 
 /**
- * One error envelope for every failure (§25), always carrying the request id.
- * Stack traces and raw messages never cross the boundary in production — an
+ * One error envelope for every failure, always carrying the request id.
+ * Stack traces and raw messages never cross the boundary in production: an
  * unexpected throw becomes a generic INTERNAL so we cannot leak query text or
  * file paths to a caller.
  */
@@ -36,7 +36,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let message = "Something went wrong.";
     let details: unknown;
 
-    if (exception instanceof ZodError) {
+    // Fastify rejects a malformed request before Nest sees it (an empty body
+    // with a JSON content-type, a payload over the size cap) and raises a
+    // plain Error carrying its own statusCode. Without this it falls through
+    // to the catch-all below and a client mistake is reported as a server
+    // fault, which is both wrong and noisy in the logs.
+    const fastifyStatus = (exception as { statusCode?: unknown })?.statusCode;
+    if (typeof fastifyStatus === "number" && fastifyStatus >= 400 && fastifyStatus < 500) {
+      status = fastifyStatus;
+      code = STATUS_TO_CODE[fastifyStatus] ?? "BAD_REQUEST";
+      message = "Malformed request.";
+    } else if (exception instanceof ZodError) {
       status = HttpStatus.BAD_REQUEST;
       code = "BAD_REQUEST";
       message = "Request validation failed.";
@@ -68,12 +78,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
   }
 
   /**
-   * Prisma's engine says so itself: a panic is "a non-recoverable error".
-   * The client stays broken for the life of the process, so every later
-   * query 500s too — observed live, a backend happily serving nothing but
-   * engine panics for as long as it was left running. Exit instead and let
-   * the supervisor in server.cjs restart it with a fresh engine, after the
-   * response above has been flushed.
+   * A Prisma engine panic is not recoverable: the client stays broken for the
+   * life of the process, so every later query fails too. Exit and let the
+   * supervisor start a fresh engine, once the response above has flushed.
    */
   private recycle() {
     this.logger.error("prisma engine panicked and cannot recover — exiting so the supervisor restarts a fresh one");

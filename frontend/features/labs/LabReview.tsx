@@ -51,7 +51,7 @@ export function LabReview({ attemptId, attemptBase = "/attempts" }: { attemptId:
   if (error) return <Card>{error}</Card>;
   if (!submissions) return <Card><Spinner label="Loading your answers…" /></Card>;
 
-  // Only the final attempt at each step — the retries are already reflected in it.
+  // Only the final attempt at each step: the retries are already reflected in it.
   const latest = new Map<LabStep, Submission>();
   for (const s of submissions) latest.set(s.step, s);
 
@@ -189,7 +189,7 @@ function Deterministic({
           ))}
         </ul>
         <p style={{ color: tokens.color.textFaint, fontSize: tokens.size.xs, marginTop: tokens.space(2) }}>
-          A difference is not a mistake — the curated priority is one defensible reading.
+          A difference is not a mistake. The curated priority is one defensible reading.
         </p>
       </div>
     );

@@ -10,7 +10,7 @@ type SelfRow = { points: number; rank: bigint };
 
 /**
  * The points ledger (added at the user's direction on top of the original
- * spec — see PointEvent's schema comment for why it's a ledger, not a counter).
+ * spec: see PointEvent's schema comment for why it's a ledger, not a counter).
  */
 @Injectable()
 export class PointsService {
@@ -20,7 +20,7 @@ export class PointsService {
    * Awards whichever candidates aren't already recorded for this attempt.
    *
    * The DB's unique constraint on (attemptId, reason, refId) is the actual
-   * guarantee against double-awarding — this pre-filter just avoids a wasted
+   * guarantee against double-awarding: this pre-filter just avoids a wasted
    * round trip and lets the caller report accurate "what's new" cheer text.
    * Racing duplicate requests still can't double-award: skipDuplicates makes
    * the insert a no-op for whichever one loses the race.
@@ -93,7 +93,7 @@ export class PointsService {
   /**
    * Top N plus the caller's own row, even when they fall outside it. Both
    * queries are raw because Prisma's query builder has no native support for
-   * a ranked group-by — the two SQL statements below are read-only and every
+   * a ranked group-by: the two SQL statements below are read-only and every
    * value is passed through Prisma.sql's tagging, never string-concatenated,
    * so there's no injection surface despite the raw SQL.
    */
@@ -106,7 +106,7 @@ export class PointsService {
     const limit = Math.min(opts.limit ?? 20, 100);
     // Explicit ::uuid casts throughout: Prisma's node-postgres driver sends
     // tagged-template parameters as text, and Postgres has no implicit
-    // uuid = text operator — every comparison against a uuid column 500s
+    // uuid = text operator: every comparison against a uuid column 500s
     // with "operator does not exist" unless the parameter is cast.
     const orgFilter =
       opts.scope === "organization" && opts.organizationId
@@ -138,7 +138,7 @@ export class PointsService {
      * Opting out removes the learner from everyone else's view, not from
      * their own. The listing above already excludes them, so the self lookup
      * below runs unconditionally and their rank is still computed against the
-     * full field — hiding your name should not also cost you your progress.
+     * full field: hiding your name should not also cost you your progress.
      */
     let self = entries.find((e) => e.isSelf) ?? null;
     if (!self) {

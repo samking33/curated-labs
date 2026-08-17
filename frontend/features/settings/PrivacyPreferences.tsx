@@ -10,7 +10,7 @@ import { Alert } from "@/components/ui";
  *
  * Opting out hides the learner from everyone else's ranking; it does not stop
  * their points being recorded, and they still see their own standing. Written
- * as an optimistic toggle that rolls back on failure — a preference control
+ * as an optimistic toggle that rolls back on failure: a preference control
  * that silently does nothing is worse than one that says it failed.
  */
 export function PrivacyPreferences({ initialOptOut }: { initialOptOut: boolean }) {

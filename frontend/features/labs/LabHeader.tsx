@@ -10,7 +10,7 @@ export type StepDef = { step: LabStep; label: string };
  * Sticky lab header: where you are, what you're doing, how far through.
  *
  * The progress rail replaced a row of pills. Pills showed the step names but
- * not the shape of the journey — you couldn't see at a glance that there are
+ * not the shape of the journey: you couldn't see at a glance that there are
  * six stops and you're on the second. A connected rail with numbered nodes
  * carries that in one look, which matters because the whole product is a
  * repeated five-step drill.
@@ -228,7 +228,7 @@ function StepRail({
 
 /**
  * The five steps as a roadmap, shown while the learner is still on the brief.
- * Setting expectations up front is worth the space — it is the difference
+ * Setting expectations up front is worth the space: it is the difference
  * between "a form" and "a guided exercise".
  */
 export function Roadmap({ steps, currentIndex }: { steps: StepDef[]; currentIndex: number }) {

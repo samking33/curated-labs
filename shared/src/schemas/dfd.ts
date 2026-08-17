@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** PROJECT.md §9. Stable IDs — the renderer, prompts and analytics all key off them. */
+/** PROJECT.md. Stable IDs: the renderer, prompts and analytics all key off them. */
 export const dfdNodeTypeSchema = z.enum([
   "external_entity",
   "process",
@@ -13,7 +13,7 @@ export const dfdNodeTypeSchema = z.enum([
 
 /** Coarse cloud-vendor styling hint for the 4 infrastructure node types
  *  (process/service/data_store/queue). Never set on external_entity,
- *  third_party, or trust_boundary — those aren't "vendor-flavored." */
+ *  third_party, or trust_boundary: those aren't "vendor-flavored." */
 export const dfdNodeProviderSchema = z.enum(["aws", "azure", "gcp"]);
 export type DfdNodeProvider = z.infer<typeof dfdNodeProviderSchema>;
 
@@ -68,7 +68,7 @@ export const dfdGraphSchema = z
     }
 
     // Nodes, edges, and trust boundaries all compile to one draw.io document
-    // (compileToDrawioXml) where every cell shares a single id namespace — a
+    // (compileToDrawioXml) where every cell shares a single id namespace: a
     // node and a boundary reusing the same id renders as one mxGraph cell
     // silently overwriting the other (mxCodec "Duplicate ID"), corrupting
     // both. Each within-type check above misses this because it only looks

@@ -7,8 +7,8 @@ import { AssistantService } from "./assistant.service";
 
 /**
  * Bounds are the point of this schema: an unbounded message array or an
- * unbounded string would let one request drive an arbitrarily large — and
- * arbitrarily expensive — model call.
+ * unbounded string would let one request drive an arbitrarily large: and
+ * arbitrarily expensive: model call.
  */
 const chatSchema = z.object({
   messages: z

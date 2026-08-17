@@ -9,7 +9,7 @@ const GOOGLE_ISSUER = "https://accounts.google.com";
 type PendingAuth = { state: string; nonce: string; codeVerifier: string; returnTo: string; createdAt: number };
 
 /**
- * Google OIDC (§12). No password path exists anywhere in this codebase.
+ * Google OIDC. No password path exists anywhere in this codebase.
  *
  * The library validates issuer, audience, signature, expiry and nonce; we add
  * the `email_verified` check, because an unverified Google email would let
@@ -65,7 +65,7 @@ export class AuthService {
   async completeLogin(params: Record<string, string | undefined>) {
     const state = params.state;
     const flow = state ? this.pending.get(state) : undefined;
-    // Consume immediately — an authorization code must never be replayable.
+    // Consume immediately: an authorization code must never be replayable.
     if (state) this.pending.delete(state);
     if (!flow) throw new UnauthorizedException("Sign-in request expired. Please try again.");
 
@@ -93,7 +93,7 @@ export class AuthService {
   }
 
   /**
-   * Google's `sub` is the stable identity — email can be reassigned within a
+   * Google's `sub` is the stable identity: email can be reassigned within a
    * Workspace domain, so matching on it alone would hand an account to whoever
    * inherits the address.
    */
@@ -151,7 +151,7 @@ export class AuthService {
     });
   }
 
-  /** Only accept relative paths — an absolute URL here is an open redirect. */
+  /** Only accept relative paths: an absolute URL here is an open redirect. */
   safeReturnTo(raw: unknown): string {
     const value = typeof raw === "string" ? raw : "";
     return value.startsWith("/") && !value.startsWith("//") ? value : "/app";

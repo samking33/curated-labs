@@ -15,7 +15,10 @@ export default async function MembersPage({ params }: { params: Promise<{ orgSlu
   const org = me.organizations.find((o) => o.slug === orgSlug);
   if (!org) notFound();
 
-  const members = await serverApi<Member[]>(`/organizations/${org.id}/members`, cookie);
+  const [members, departments] = await Promise.all([
+    serverApi<Member[]>(`/organizations/${org.id}/members`, cookie),
+    serverApi<{ id: string; name: string }[]>(`/organizations/${org.id}/departments`, cookie),
+  ]);
 
   return (
     <>
@@ -27,6 +30,7 @@ export default async function MembersPage({ params }: { params: Promise<{ orgSlu
           myRole={org.role}
           myUserId={me.user.id}
           initialMembers={members ?? []}
+          departments={departments ?? []}
         />
       </main>
     </>
