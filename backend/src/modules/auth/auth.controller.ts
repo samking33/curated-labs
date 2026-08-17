@@ -1,7 +1,13 @@
-import { Body, Controller, Get, Inject, NotFoundException, Post, Query, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, Inject, NotFoundException, Patch, Post, Query, Req, Res } from "@nestjs/common";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { CSRF_COOKIE, SESSION_COOKIE, type MeResponse } from "@curated-labs/shared";
+import {
+  CSRF_COOKIE,
+  SESSION_COOKIE,
+  updatePreferencesRequestSchema,
+  type MeResponse,
+  type UpdatePreferencesRequest,
+} from "@curated-labs/shared";
 import { CONFIG, type AppConfig } from "../../config";
 import { Public } from "../../common/decorators/public.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -108,7 +114,24 @@ export class AuthController {
           role: m.role,
         })),
       accountKind: record.accountKind,
+      leaderboardOptOut: record.leaderboardOptOut,
     };
+  }
+
+  /**
+   * Learner-controlled preferences. Only ever writes the caller's own row —
+   * there is no user id in the path, so one learner cannot change another's.
+   */
+  @Patch("me/preferences")
+  async updatePreferences(
+    @CurrentUser() user: AuthContext,
+    @Body(new ZodValidationPipe(updatePreferencesRequestSchema)) body: UpdatePreferencesRequest,
+  ) {
+    await this.prisma.user.update({
+      where: { id: user.userId },
+      data: { leaderboardOptOut: body.leaderboardOptOut },
+    });
+    return { ok: true, leaderboardOptOut: body.leaderboardOptOut };
   }
 
   /**

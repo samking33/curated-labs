@@ -23,6 +23,7 @@ export function LabHeader({
   minutes,
   steps,
   currentIndex,
+  onRevisit,
   backHref = "/app/catalog",
   categoryHref = `/app/catalog/${categorySlug}`,
 }: {
@@ -33,6 +34,9 @@ export function LabHeader({
   minutes: number;
   steps: StepDef[];
   currentIndex: number;
+  /** Set to make already-completed stops clickable, for reviewing an earlier
+   *  answer. Read-only: revisiting never lets a submitted step be re-answered. */
+  onRevisit?: (step: StepDef["step"]) => void;
   backHref?: string;
   categoryHref?: string;
 }) {
@@ -94,7 +98,7 @@ export function LabHeader({
         </div>
       </div>
 
-      <StepRail steps={steps} currentIndex={currentIndex} />
+      <StepRail steps={steps} currentIndex={currentIndex} onRevisit={onRevisit} />
     </header>
   );
 }
@@ -119,7 +123,15 @@ function Meta({ children, capitalize }: { children: React.ReactNode; capitalize?
   );
 }
 
-function StepRail({ steps, currentIndex }: { steps: StepDef[]; currentIndex: number }) {
+function StepRail({
+  steps,
+  currentIndex,
+  onRevisit,
+}: {
+  steps: StepDef[];
+  currentIndex: number;
+  onRevisit?: (step: StepDef["step"]) => void;
+}) {
   return (
     <nav
       aria-label="Lab progress"
@@ -135,8 +147,20 @@ function StepRail({ steps, currentIndex }: { steps: StepDef[]; currentIndex: num
         const nodeBg = done || current ? tokens.color.accent : tokens.color.surface;
         const nodeFg = done || current ? tokens.color.accentText : tokens.color.textFaint;
 
+        // Only finished stops are revisitable, and only to read them back.
+        const revisitable = done && Boolean(onRevisit);
+
         return (
-          <div key={s.step} style={{ display: "grid", justifyItems: "center", position: "relative", minWidth: 0 }}>
+          <div
+            key={s.step}
+            onClick={revisitable ? () => onRevisit!(s.step) : undefined}
+            role={revisitable ? "button" : undefined}
+            tabIndex={revisitable ? 0 : undefined}
+            onKeyDown={revisitable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRevisit!(s.step); } } : undefined}
+            aria-label={revisitable ? `Review your ${s.label} answer` : undefined}
+            title={revisitable ? `Review your ${s.label} answer` : undefined}
+            style={{ display: "grid", justifyItems: "center", position: "relative", minWidth: 0, cursor: revisitable ? "pointer" : "default" }}
+          >
             {/* Connector drawn behind the node, and only between nodes. */}
             {i > 0 && (
               <span

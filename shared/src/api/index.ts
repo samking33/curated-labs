@@ -55,6 +55,9 @@ export const meResponseSchema = z.object({
   ),
   /** Null until the user picks individual or organization. Drives /onboarding. */
   accountKind: z.enum(["individual", "organization"]).nullable(),
+  /** When true the learner is hidden from everyone else's leaderboard. They
+   *  still see their own standing. */
+  leaderboardOptOut: z.boolean().default(false),
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
 
@@ -265,3 +268,10 @@ export const progressSchema = z.object({
   ),
 });
 export type Progress = z.infer<typeof progressSchema>;
+
+/* ------------------------------------------------------------ preferences */
+
+export const updatePreferencesRequestSchema = z.object({
+  leaderboardOptOut: z.boolean(),
+});
+export type UpdatePreferencesRequest = z.infer<typeof updatePreferencesRequestSchema>;

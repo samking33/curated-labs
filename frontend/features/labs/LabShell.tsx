@@ -95,6 +95,15 @@ export function LabShell({
   const [pendingStep, setPendingStep] = useState<LabStep | null>(null);
 
   /**
+   * Read-only look-back. Holds the finished step being reviewed, if any.
+   * Submitted answers cannot be changed — the server has already graded them
+   * and awarded points — so this shows what was said and what the coach
+   * replied, and nothing more.
+   */
+  const [reviewing, setReviewing] = useState<LabStep | null>(null);
+  const [history, setHistory] = useState<Record<string, { answer: unknown; aiFeedback: unknown; deterministic: unknown }>>({});
+
+  /**
    * The threat list used by steps 3 and 4. It only ever comes from a reveal
    * response — the lab payload never carries canonical threats (§28), so before
    * reveal there is genuinely nothing here to leak.
@@ -123,7 +132,7 @@ export function LabShell({
           currentStep: LabStep;
           status: string;
           revealedThreats: RevealedThreat[] | null;
-          submissions: { step: LabStep; aiFeedbackJson: unknown; deterministicResultJson: unknown; attemptNumber: number; id: string }[];
+          submissions: { step: LabStep; answer: unknown; aiFeedbackJson: unknown; deterministicResultJson: unknown; attemptNumber: number; id: string }[];
         }>(`${attemptBase}/${initialAttemptId}`);
         if (cancelled) return;
 
@@ -141,6 +150,14 @@ export function LabShell({
         // Put the most recent coaching back on screen so returning mid-lab does
         // not look like the previous answer vanished.
         setThreatAttempts(attempt.submissions.filter((sub) => sub.step === "threats").length);
+        setHistory(
+          Object.fromEntries(
+            attempt.submissions.map((sub) => [
+              sub.step,
+              { answer: sub.answer, aiFeedback: sub.aiFeedbackJson, deterministic: sub.deterministicResultJson },
+            ]),
+          ),
+        );
 
         const last = attempt.submissions.at(-1);
         if (last) {
@@ -202,6 +219,10 @@ export function LabShell({
           idempotencyKey: newIdempotencyKey(),
         });
         setResult(res);
+        setHistory((prev) => ({
+          ...prev,
+          [target]: { answer: body, aiFeedback: res.aiFeedback, deterministic: res.deterministicResult },
+        }));
         if (res.revealedThreats?.length) setThreats(res.revealedThreats);
         if (res.cheers.length > 0) {
           setCheer({ key: res.submissionId, points: res.pointsAwarded, cheers: res.cheers });
@@ -353,6 +374,7 @@ export function LabShell({
         minutes={lab.estimatedMinutes}
         steps={STEP_LABELS}
         currentIndex={currentIndex}
+        onRevisit={attemptId ? (s) => setReviewing(s) : undefined}
         backHref={backHref}
       />
 
@@ -424,11 +446,24 @@ export function LabShell({
         <div style={{ display: "grid", gap: tokens.space(4), alignContent: "start", minWidth: 0 }}>
           {error && <Alert tone="error">{error}</Alert>}
           <NodeDetailsPanel selection={selection} />
-          {/* While reviewing, the next step's form stays hidden so the
-              coaching below is the only thing on screen to read. */}
-          {pendingStep ? <StepDone label={labelFor(step)} /> : body}
-          <FeedbackPanel result={result} loading={busy && Boolean(result)} error={null} />
-          {pendingStep && (
+          {/* Looking back at a finished step replaces the workspace entirely,
+              so there is no chance of typing into a form that will not submit. */}
+          {reviewing ? (
+            <PastStep
+              label={labelFor(reviewing)}
+              entry={history[reviewing]}
+              onClose={() => setReviewing(null)}
+              currentLabel={labelFor(step)}
+            />
+          ) : (
+            <>
+              {/* While reviewing the step just submitted, the next step's form
+                  stays hidden so the coaching below is the only thing to read. */}
+              {pendingStep ? <StepDone label={labelFor(step)} /> : body}
+              <FeedbackPanel result={result} loading={busy && Boolean(result)} error={null} />
+            </>
+          )}
+          {pendingStep && !reviewing && (
             <Card>
               <p style={{ margin: `0 0 ${tokens.space(3)}`, color: tokens.color.textMuted, fontSize: tokens.size.sm }}>
                 Read the feedback above, then carry on when you are ready.
@@ -443,13 +478,111 @@ export function LabShell({
               </Button>
             </Card>
           )}
-          {(!attemptId || step === "intro") && (
+          {(!attemptId || step === "intro") && !reviewing && (
             <Roadmap steps={STEP_LABELS} currentIndex={currentIndex} />
           )}
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * A finished step, read back. Deliberately shows the answer and the coaching
+ * with no controls: the submission is already graded and scored server-side,
+ * so offering an edit here would be a lie.
+ */
+function PastStep({
+  label,
+  entry,
+  currentLabel,
+  onClose,
+}: {
+  label: string;
+  entry?: { answer: unknown; aiFeedback: unknown; deterministic: unknown };
+  currentLabel: string;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: tokens.space(3) }}>
+          <div>
+            <div style={{ fontSize: tokens.size.xs, textTransform: "uppercase", letterSpacing: 1, color: tokens.color.textFaint }}>
+              Looking back
+            </div>
+            <strong style={{ fontSize: tokens.size.lg }}>{label}</strong>
+          </div>
+          <Button variant="ghost" onClick={onClose}>{`Back to ${currentLabel.toLowerCase()} →`}</Button>
+        </div>
+        <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm, margin: `${tokens.space(3)} 0 0` }}>
+          Already submitted and scored, so this is read-only.
+        </p>
+      </Card>
+
+      {entry ? (
+        <>
+          <Card>
+            <strong style={{ fontSize: tokens.size.base }}>What you said</strong>
+            <pre
+              style={{
+                margin: `${tokens.space(2)} 0 0`,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontFamily: tokens.font.sans,
+                fontSize: tokens.size.sm,
+                color: tokens.color.textMuted,
+                lineHeight: 1.55,
+              }}
+            >
+              {summariseAnswer(entry.answer)}
+            </pre>
+          </Card>
+          <FeedbackPanel
+            result={{
+              submissionId: "review",
+              attemptNumber: 1,
+              currentStep: "completed",
+              aiFeedback: entry.aiFeedback ?? null,
+              aiStatus: entry.aiFeedback ? "ok" : "unavailable",
+              deterministicResult: entry.deterministic ?? null,
+              revealedAttackSurfaces: null,
+              revealedThreats: null,
+              pointsAwarded: 0,
+              cheers: [],
+            }}
+            loading={false}
+            error={null}
+          />
+        </>
+      ) : (
+        <Card>
+          <p style={{ margin: 0, color: tokens.color.textMuted }}>
+            Nothing recorded for this step yet.
+          </p>
+        </Card>
+      )}
+    </>
+  );
+}
+
+/** Submissions are step-shaped, not one type — render whichever fields a
+ *  given step actually carries rather than dumping raw JSON at the learner. */
+function summariseAnswer(answer: unknown): string {
+  const a = answer as Record<string, unknown> | null;
+  if (!a || typeof a !== "object") return "—";
+  if (typeof a.text === "string") return a.text;
+  if (Array.isArray(a.threats)) return (a.threats as string[]).map((t) => `• ${t}`).join("\n");
+  if (Array.isArray(a.items)) {
+    return (a.items as { priority?: string; rationale?: string }[])
+      .map((i) => `• ${i.priority ?? "?"} — ${i.rationale ?? ""}`)
+      .join("\n");
+  }
+  if (Array.isArray(a.pairings)) return `${(a.pairings as unknown[]).length} threat/mitigation pairs submitted.`;
+  if (typeof a.decision === "string") {
+    return `${String(a.decision).replace(/_/g, " ")}\n\n${String(a.rationale ?? "")}`;
+  }
+  return "—";
 }
 
 function labelFor(step: LabStep): string {

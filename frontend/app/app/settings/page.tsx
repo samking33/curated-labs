@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { getMe } from "@/lib/session";
 import { tokens } from "@/lib/tokens";
 import { AppNav } from "@/features/auth/AppNav";
+import { PrivacyPreferences } from "@/features/settings/PrivacyPreferences";
+import { SUPPORT_EMAIL } from "@/lib/support";
 
 export const metadata = { title: "Settings — Curated Labs" };
 
@@ -23,9 +25,12 @@ export default async function SettingsPage() {
           <Row label="Email" value={me.user.email} />
           <Row label="Account type" value={me.accountKind ?? "not set"} />
           <p style={{ color: tokens.color.textFaint, fontSize: tokens.size.xs }}>
-            Your profile comes from Google. Change it there and sign in again to refresh it.
+            Your name and email come from whichever account you signed in with, so they are not
+            editable here.
           </p>
         </section>
+
+        <PrivacyPreferences initialOptOut={me.leaderboardOptOut} />
 
         <section style={{ marginBottom: tokens.space(6) }}>
           <h2 style={{ fontSize: tokens.size.lg }}>Organizations</h2>
@@ -41,6 +46,13 @@ export default async function SettingsPage() {
           <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm }}>
             We store your name, email and lab activity. To have your account disabled and your
             personal data removed, contact your platform administrator.
+          </p>
+          <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm }}>
+            Something broken or wrong? Email{" "}
+            <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: tokens.color.accent }}>
+              {SUPPORT_EMAIL}
+            </a>
+            .
           </p>
         </section>
       </main>

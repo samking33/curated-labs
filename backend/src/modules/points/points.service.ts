@@ -110,8 +110,8 @@ export class PointsService {
     // with "operator does not exist" unless the parameter is cast.
     const orgFilter =
       opts.scope === "organization" && opts.organizationId
-        ? Prisma.sql`WHERE pe.organization_id = ${opts.organizationId}::uuid AND u.disabled_at IS NULL`
-        : Prisma.sql`WHERE u.disabled_at IS NULL`;
+        ? Prisma.sql`WHERE pe.organization_id = ${opts.organizationId}::uuid AND u.disabled_at IS NULL AND u.leaderboard_opt_out = false`
+        : Prisma.sql`WHERE u.disabled_at IS NULL AND u.leaderboard_opt_out = false`;
 
     const rows = await this.prisma.$queryRaw<LeaderboardRow[]>`
       SELECT u.id AS "userId", u.name, u.avatar_url AS "avatarUrl",
@@ -134,6 +134,12 @@ export class PointsService {
       isSelf: r.userId === opts.viewerUserId,
     }));
 
+    /*
+     * Opting out removes the learner from everyone else's view, not from
+     * their own. The listing above already excludes them, so the self lookup
+     * below runs unconditionally and their rank is still computed against the
+     * full field — hiding your name should not also cost you your progress.
+     */
     let self = entries.find((e) => e.isSelf) ?? null;
     if (!self) {
       const selfOrgFilter =
