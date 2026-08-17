@@ -16,11 +16,12 @@ type Submission = {
 };
 
 const STEP_TITLE: Partial<Record<LabStep, string>> = {
-  architecture_issues: "1 · Architecture issues",
-  threats: "2 · Threats identified",
-  prioritization: "3 · Prioritization",
-  mitigations: "4 · Mitigation matching",
-  release_decision: "5 · Release decision",
+  architecture_issues: "1 · Architectural analysis",
+  attack_surfaces: "2 · Attack surfaces",
+  threats: "3 · Threat identification",
+  prioritization: "4 · Assessing priority",
+  mitigations: "5 · Mitigation mapping",
+  release_decision: "6 · Decision",
 };
 
 /**
@@ -84,6 +85,17 @@ function Answer({
 
   if (step === "architecture_issues") return <p style={muted}>{String(a.text ?? "")}</p>;
 
+  if (step === "attack_surfaces") {
+    const picked = (Array.isArray(a.referencedNodeIds) ? a.referencedNodeIds.length : 0) +
+      (Array.isArray(a.referencedEdgeIds) ? a.referencedEdgeIds.length : 0);
+    return (
+      <>
+        <p style={muted}>{String(a.text ?? "")}</p>
+        <p style={muted}>{picked} element{picked === 1 ? "" : "s"} marked on the diagram.</p>
+      </>
+    );
+  }
+
   if (step === "threats") {
     const list = Array.isArray(a.threats) ? (a.threats as string[]) : [];
     return (
@@ -136,6 +148,15 @@ function Deterministic({
 }) {
   const r = result as Record<string, unknown> | null;
   if (!r) return null;
+
+  if (step === "attack_surfaces" && typeof r.total === "number") {
+    return (
+      <p style={{ marginTop: tokens.space(3), fontSize: tokens.size.sm, color: tokens.color.textMuted }}>
+        Identified <strong style={{ color: tokens.color.text }}>{String(r.identified)}</strong> of{" "}
+        {String(r.total)} ways into the system.
+      </p>
+    );
+  }
 
   if (step === "mitigations") {
     return (

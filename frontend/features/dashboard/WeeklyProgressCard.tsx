@@ -20,8 +20,20 @@ export type Segment = {
  * the right-hand arc rather than spread evenly: it leaves the left side of the
  * dial quiet and keeps the labels off the card's edge.
  */
-const SEGMENT_DEG = [0, 48, 96, 150];
 const TRACK_END = 168;
+
+/**
+ * Spread the checkpoints evenly along the track.
+ *
+ * This was a hardcoded [0, 48, 96, 150] for exactly four steps. Adding a
+ * fifth checkpoint sent it off the end of the arc — the fallback put it at
+ * (4/5)*360 = 288 degrees on a track that stops at 168 — so it is derived
+ * from the count now and cannot drift out of range again when a step is
+ * added or removed.
+ */
+function segmentDeg(index: number, count: number): number {
+  return count <= 1 ? 0 : (index / (count - 1)) * TRACK_END;
+}
 
 /* ------------------------------------------------------------ geometry */
 
@@ -167,7 +179,7 @@ export function WeeklyProgressCard({
 
           {/* one checkpoint per segment, filled up to today's progress */}
           {segments.map((s, i) => {
-            const deg = SEGMENT_DEG[i] ?? (i / segments.length) * 360;
+            const deg = segmentDeg(i, segments.length);
             const p = polar(R_OUTER, deg);
             const reached = deg <= fraction * TRACK_END + 0.5;
             return (
@@ -245,7 +257,7 @@ export function WeeklyProgressCard({
            * jump straight to e.g. Mitigations, which was never true.
            */}
           {segments.map((s, i) => {
-            const deg = SEGMENT_DEG[i] ?? (i / segments.length) * 360;
+            const deg = segmentDeg(i, segments.length);
             const p = polar(R_INNER + 34, deg);
             const live = currentStep === s.step;
             return (
