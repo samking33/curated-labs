@@ -64,6 +64,24 @@ export type PlaygroundScenarioDraft = z.infer<typeof playgroundScenarioDraftSche
  * a malformed row must fail loudly at the read site, not deep inside a
  * grading loop.
  */
+/**
+ * Just enough of a stored scenario to render its card.
+ *
+ * Kept separate from the full content schema so listing a scenario does not
+ * depend on every threat still matching the current enums. A scenario written
+ * before a schema was narrowed should still be listed rather than taking the
+ * whole response down with it.
+ */
+export const scenarioHeaderSchema = z.object({
+  lab: z.object({
+    title: z.string().min(1),
+    summary: z.string().min(1),
+    difficulty: labDifficultySchema,
+    estimatedMinutes: z.number().int().positive(),
+  }),
+});
+export type ScenarioHeader = z.infer<typeof scenarioHeaderSchema>;
+
 export const playgroundScenarioContentSchema = z.object({
   lab: z.object({
     title: z.string().min(1),

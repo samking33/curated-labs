@@ -21,6 +21,7 @@ import {
   type LabSummary,
   type PlaygroundScenarioContent,
   type PlaygroundScenarioDraft,
+  scenarioHeaderSchema,
 } from "@curated-labs/shared";
 import { CONFIG, type AppConfig } from "../../config";
 import { PrismaService } from "../prisma/prisma.service";
@@ -340,25 +341,40 @@ export class PlaygroundGenerationService {
 
   /* -------------------------------------------------------------- reading */
 
+  /**
+   * The card only needs the lab header, so it is read on its own rather than
+   * by parsing the whole scenario. Full-parsing here meant one row the current
+   * schema could not read, a scenario generated before the threat categories
+   * were narrowed, failed the whole request: the learner saw no scenarios at
+   * all, including every good one. A row that cannot be read is skipped and
+   * logged instead of hiding the rest.
+   */
   async listScenarios(user: AuthContext): Promise<LabSummary[]> {
     const scenarios = await this.prisma.playgroundGeneratedScenario.findMany({
       where: { userId: user.userId },
       orderBy: { createdAt: "desc" },
       include: { attempts: { orderBy: { startedAt: "desc" }, take: 1 } },
     });
-    return scenarios.map((s) => {
-      const content = playgroundScenarioContentSchema.parse(s.contentJson);
+    return scenarios.flatMap((s) => {
+      const header = scenarioHeaderSchema.safeParse(s.contentJson);
+      if (!header.success) {
+        this.logger.warn({ scenarioId: s.id }, "scenario content is unreadable by the current schema; omitted from the list");
+        return [];
+      }
+      const content = { lab: header.data.lab };
       const attempt = s.attempts[0];
-      return {
-        id: s.id,
-        slug: s.id, // playground has no slug routing
-        title: content.lab.title,
-        summary: content.lab.summary,
-        difficulty: content.lab.difficulty,
-        estimatedMinutes: content.lab.estimatedMinutes,
-        category: { id: "playground", name: "Playground", slug: "playground" },
-        attempt: attempt ? { id: attempt.id, status: attempt.status, currentStep: attempt.currentStep } : null,
-      };
+      return [
+        {
+          id: s.id,
+          slug: s.id, // playground has no slug routing
+          title: content.lab.title,
+          summary: content.lab.summary,
+          difficulty: content.lab.difficulty,
+          estimatedMinutes: content.lab.estimatedMinutes,
+          category: { id: "playground", name: "Playground", slug: "playground" },
+          attempt: attempt ? { id: attempt.id, status: attempt.status, currentStep: attempt.currentStep } : null,
+        },
+      ];
     });
   }
 
@@ -407,7 +423,16 @@ export class PlaygroundGenerationService {
     if (!scenario || (ownerUserId && scenario.userId !== ownerUserId)) {
       throw new NotFoundException("Scenario not found.");
     }
-    return playgroundScenarioContentSchema.parse(scenario.contentJson);
+    const content = playgroundScenarioContentSchema.safeParse(scenario.contentJson);
+    if (!content.success) {
+      // Written before a schema was narrowed, so the workflow cannot grade it.
+      // Say that plainly rather than throwing a parse error at the learner.
+      this.logger.warn({ scenarioId }, "stored scenario no longer matches the content schema");
+      throw new BadRequestException(
+        "This scenario was generated under an older format and can no longer be opened. Generate a new one.",
+      );
+    }
+    return content.data;
   }
 
   /** Owner-only. Re-validates that every threat/architecture-issue reference
