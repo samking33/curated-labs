@@ -19,6 +19,26 @@ const schema = z.object({
 
   SESSION_SECRET: z.string().min(16),
 
+  /**
+   * OpenAI, used for every model call when set. NVIDIA NIM speaks the same
+   * chat/completions dialect, so one client covers both and the provider is
+   * chosen here rather than in the code that asks for coaching.
+   */
+  OPENAI_API_KEY: z.string().default(""),
+  OPENAI_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  /**
+   * Measured on real lab prompts rather than picked by size, the same way the
+   * NIM choices below were: gpt-4.1 answered in ~2.3s, gpt-4o-mini in ~3.0s
+   * and gpt-4.1-mini in ~5.0s, all returning valid JSON. The gpt-5 family
+   * spends its whole token budget on hidden reasoning and returns an empty
+   * message, so it is not a candidate at these ceilings.
+   */
+  OPENAI_MODEL_REASONING: z.string().default("gpt-4.1"),
+  OPENAI_MODEL_JSON: z.string().default("gpt-4.1-mini"),
+  OPENAI_MODEL_FAST: z.string().default("gpt-4o-mini"),
+  /** Authoring a whole scenario: ~29s and correctly shaped on gpt-4.1. */
+  OPENAI_MODEL_AUTHOR: z.string().default("gpt-4.1"),
+
   NVIDIA_NIM_API_KEY: z.string().default(""),
   NVIDIA_NIM_BASE_URL: z.string().default("https://integrate.api.nvidia.com/v1"),
   NVIDIA_NIM_MODEL_REASONING: z.string().default("nvidia/nemotron-3-super-120b-a12b"),
@@ -107,6 +127,12 @@ export type AppConfig = z.infer<typeof schema> & {
   googleConfigured: boolean;
   nimConfigured: boolean;
   anthropicConfigured: boolean;
+
+  /** Which provider answers chat calls, resolved once from the keys present. */
+  aiProvider: "openai" | "nim";
+  aiApiKey: string;
+  aiBaseUrl: string;
+  aiModels: { reasoning: string; json: string; fast: string; author: string };
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -141,6 +167,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     googleConfigured: Boolean(cfg.GOOGLE_CLIENT_ID && cfg.GOOGLE_CLIENT_SECRET),
     nimConfigured: Boolean(cfg.NVIDIA_NIM_API_KEY),
     anthropicConfigured: Boolean(cfg.ANTHROPIC_API_KEY),
+
+    // One provider for every chat call. OpenAI wins when it has a key, so a
+    // deployment switches by setting one variable rather than by a release.
+    aiProvider: cfg.OPENAI_API_KEY ? ("openai" as const) : ("nim" as const),
+    aiApiKey: cfg.OPENAI_API_KEY || cfg.NVIDIA_NIM_API_KEY,
+    aiBaseUrl: cfg.OPENAI_API_KEY ? cfg.OPENAI_BASE_URL : cfg.NVIDIA_NIM_BASE_URL,
+    aiModels: cfg.OPENAI_API_KEY
+      ? {
+          reasoning: cfg.OPENAI_MODEL_REASONING,
+          json: cfg.OPENAI_MODEL_JSON,
+          fast: cfg.OPENAI_MODEL_FAST,
+          author: cfg.OPENAI_MODEL_AUTHOR,
+        }
+      : {
+          reasoning: cfg.NVIDIA_NIM_MODEL_REASONING,
+          json: cfg.NVIDIA_NIM_MODEL_JSON,
+          fast: cfg.NVIDIA_NIM_MODEL_FAST,
+          author: "",
+        },
   };
 }
 

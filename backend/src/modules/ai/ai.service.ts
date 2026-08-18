@@ -342,7 +342,12 @@ export class AiService {
     difficulty?: GenerateScenarioRequest["difficulty"];
     priorErrors?: string[];
   }): Promise<AiResult<PlaygroundScenarioDraft>> {
-    if (!this.anthropic.configured) return { feedback: null, status: "unavailable" };
+    // Authoring is one long call rather than the short graded ones, so it
+    // picks its own model. OpenAI takes it when configured, since it writes a
+    // correctly shaped scenario in about a third of the budget; Anthropic
+    // stays as the fallback for a deployment with only that key.
+    const authorViaOpenAi = this.config.aiProvider === "openai" && this.nim.configured;
+    if (!authorViaOpenAi && !this.anthropic.configured) return { feedback: null, status: "unavailable" };
 
     const user = this.truncate(buildGeneratorUserPrompt(input));
     const prompt = AUTHOR_PROMPTS.playground_scenario;
@@ -350,12 +355,27 @@ export class AiService {
     const started = Date.now();
 
     try {
-      const response = await this.anthropic.chat({
-        system: prompt.system,
-        user,
-        maxTokens: this.config.PLAYGROUND_GEN_MAX_OUTPUT_TOKENS,
-        deadline,
-      });
+      const response: {
+        text: string;
+        model: string;
+        inputTokens?: number;
+        outputTokens?: number;
+        stopReason?: string;
+      } = authorViaOpenAi
+        ? await this.nim.chat({
+            model: this.config.aiModels.author,
+            system: prompt.system,
+            user,
+            maxTokens: this.config.PLAYGROUND_GEN_MAX_OUTPUT_TOKENS,
+            attemptTimeoutMs: this.config.PLAYGROUND_GEN_ATTEMPT_TIMEOUT_MS,
+            deadline,
+          })
+        : await this.anthropic.chat({
+            system: prompt.system,
+            user,
+            maxTokens: this.config.PLAYGROUND_GEN_MAX_OUTPUT_TOKENS,
+            deadline,
+          });
 
       let payload: unknown;
       try {
@@ -369,7 +389,7 @@ export class AiService {
         });
         this.logger.warn(
           { task: "playground_scenario", stopReason: response.stopReason, outputTokens: response.outputTokens },
-          "Anthropic response was not JSON",
+          "author response was not JSON",
         );
         return { feedback: null, status: "invalid" };
       }
@@ -382,7 +402,7 @@ export class AiService {
         });
         this.logger.warn(
           { task: "playground_scenario", issues: parsed.error.issues.length },
-          "Anthropic response failed schema validation",
+          "author response failed schema validation",
         );
         return { feedback: null, status: "invalid" };
       }
@@ -407,12 +427,14 @@ export class AiService {
       });
       return { feedback: redacted.value, status: "ok", model: response.model };
     } catch (err) {
-      const code = err instanceof AnthropicUnavailableError ? err.code : "UNKNOWN";
-      await this.recordCall("playground_scenario", this.config.ANTHROPIC_MODEL, prompt.version, "error", started, {
+      const code =
+        err instanceof AnthropicUnavailableError || err instanceof NimUnavailableError ? err.code : "UNKNOWN";
+      const model = authorViaOpenAi ? this.config.aiModels.author : this.config.ANTHROPIC_MODEL;
+      await this.recordCall("playground_scenario", model, prompt.version, "error", started, {
         labId: input.sessionId,
         code,
       });
-      this.logger.warn({ task: "playground_scenario", code }, "Anthropic call failed");
+      this.logger.warn({ task: "playground_scenario", code, model }, "author call failed");
       return { feedback: null, status: "unavailable" };
     }
   }
@@ -545,9 +567,7 @@ export class AiService {
    * a deploy.
    */
   private modelsFor(task: TaskKey): string[] {
-    const reasoning = this.config.NVIDIA_NIM_MODEL_REASONING;
-    const json = this.config.NVIDIA_NIM_MODEL_JSON;
-    const fast = this.config.NVIDIA_NIM_MODEL_FAST;
+    const { reasoning, json, fast } = this.config.aiModels;
 
     /*
      * Ordered by MEASURED behaviour on real lab prompts, not by model size.

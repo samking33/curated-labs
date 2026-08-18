@@ -130,7 +130,7 @@ ${context}`;
 
     try {
       const res = await this.nim.chat({
-        model: this.config.NVIDIA_NIM_MODEL_FAST,
+        model: this.config.aiModels.fast,
         system: this.system(context),
         history,
         user: latest.content,

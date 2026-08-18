@@ -27,7 +27,7 @@ function makeStubNim(overrides: { configured?: boolean; chat?: () => Promise<{ t
   };
 }
 
-const stubConfig = { NVIDIA_NIM_MODEL_FAST: "test-fast-model" };
+const stubConfig = { aiModels: { fast: "test-fast-model", reasoning: "r", json: "j", author: "a" } };
 
 describe("AssistantService.reply", () => {
   it("replies normally when the model call succeeds", async () => {

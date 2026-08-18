@@ -54,7 +54,11 @@ const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const TERMINAL_CODES = new Set(["TIMEOUT", "NOT_CONFIGURED", "EMPTY_RESPONSE"]);
 
 /**
- * The only place in the system that talks to NVIDIA NIM.
+ * The only place in the system that talks to the model provider.
+ *
+ * OpenAI and NVIDIA NIM speak the same chat/completions dialect, so which one
+ * answers is a matter of configuration rather than of code. The provider is
+ * resolved once in loadConfig().
  *
  * The API key never leaves this class and is never logged. Callers get either a
  * validated response or NimUnavailableError: they must not see raw HTTP.
@@ -66,7 +70,7 @@ export class NimClient {
   constructor(@Inject(CONFIG) private readonly config: AppConfig) {}
 
   get configured(): boolean {
-    return this.config.nimConfigured;
+    return Boolean(this.config.aiApiKey);
   }
 
   /** Stable hash of a request, for the ai_calls dedupe index and caching. */
@@ -85,7 +89,7 @@ export class NimClient {
    * AI_RETRY_COUNT + 1; the timeout applies per attempt, not to the whole call.
    */
   async chat(request: ChatRequest & { deadline?: number }): Promise<ChatResponse> {
-    if (!this.configured) throw new NimUnavailableError("NIM is not configured.", "NOT_CONFIGURED");
+    if (!this.configured) throw new NimUnavailableError("No AI provider is configured.", "NOT_CONFIGURED");
 
     const body = {
       model: request.model,
@@ -166,10 +170,10 @@ export class NimClient {
   private async fetchJson(path: string, init: RequestInit, timeoutMs: number): Promise<unknown> {
     let response: Response;
     try {
-      response = await fetch(`${this.config.NVIDIA_NIM_BASE_URL}${path}`, {
+      response = await fetch(`${this.config.aiBaseUrl}${path}`, {
         ...init,
         headers: {
-          Authorization: `Bearer ${this.config.NVIDIA_NIM_API_KEY}`,
+          Authorization: `Bearer ${this.config.aiApiKey}`,
           "Content-Type": "application/json",
           Accept: "application/json",
         },
@@ -178,7 +182,7 @@ export class NimClient {
     } catch (err) {
       const timedOut = (err as Error).name === "TimeoutError";
       throw new NimUnavailableError(
-        timedOut ? `NIM timed out after ${timeoutMs}ms.` : "Could not reach NIM.",
+        timedOut ? `${this.config.aiProvider} timed out after ${timeoutMs}ms.` : `Could not reach ${this.config.aiProvider}.`,
         timedOut ? "TIMEOUT" : "NETWORK",
       );
     }
@@ -186,9 +190,9 @@ export class NimClient {
     if (!response.ok) {
       // Body may contain the prompt echoed back: truncate, never log the key.
       const detail = (await response.text().catch(() => "")).slice(0, 200);
-      const error = new NimUnavailableError(`NIM returned ${response.status}.`, `HTTP_${response.status}`);
+      const error = new NimUnavailableError(`${this.config.aiProvider} returned ${response.status}.`, `HTTP_${response.status}`);
       (error as NimUnavailableError & { status?: number }).status = response.status;
-      this.logger.warn({ status: response.status, path, detail }, "NIM error response");
+      this.logger.warn({ provider: this.config.aiProvider, status: response.status, path, detail }, "AI error response");
       throw error;
     }
     return response.json();

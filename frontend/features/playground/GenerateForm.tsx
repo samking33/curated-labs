@@ -17,17 +17,16 @@ const POLL_MS = 2000;
 // realistic case rather than the typical one.
 const MAX_POLLS = 180;
 // Calibration point for the progress bar's asymptotic curve. Measured end to
-// end against the real model: 70s, 94s, 196s and 230s. Tuned to the slow end
-// of that rather than the median: a bar that reaches 75% and crawls reads as
-// stuck, which is exactly how a working 230s generation got reported as
-// "playground is not accessible". Real completion always drives the actual
-// 100%, never this timer.
-const EXPECTED_MS = 190_000;
+// end against the real model: 21s, 24s, 24s and 25s. Tuned above the slow end
+// rather than to the median, because a bar that reaches 75% and crawls reads
+// as stuck. Real completion always drives the actual 100%, never this timer.
+const EXPECTED_MS = 45_000;
 const PROGRESS_CAP = 92;
 
 /**
  * Describe a system, get a generated practice scenario. Generation is async
- * (the sole viable model measures ~85s), so this polls a job rather than
+ * (measured around 25s, and the server allows far longer), so this polls a
+ * job rather than
  * holding a request open.
  *
  * ponytail: polling, not SSE. 2s over ~2min of generation is ~60 requests
@@ -93,7 +92,7 @@ export function GenerateForm() {
       // "a minute or two" made a working generation look hung.
       setStatus(
         job.status === "running"
-          ? "Building your scenario. This usually takes 2 to 4 minutes, and you can leave this tab open."
+          ? "Building your scenario. This usually takes under a minute, and you can leave this tab open."
           : "Queued…",
       );
       await sleep(POLL_MS);

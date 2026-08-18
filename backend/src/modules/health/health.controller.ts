@@ -31,13 +31,13 @@ export class HealthController {
   @Public()
   @Get("dependencies")
   async dependencies() {
-    const [database, nim] = await Promise.all([
+    const [database, ai] = await Promise.all([
       this.check(() => this.prisma.$queryRaw`SELECT 1`),
-      this.config.nimConfigured
+      this.nim.configured
         ? this.check(() => this.nim.ping())
-        : Promise.resolve({ ok: false, skipped: true, error: "NVIDIA_NIM_API_KEY not set" }),
+        : Promise.resolve({ ok: false, skipped: true, error: "no AI provider key set" }),
     ]);
-    return { database, nim, aiRequired: false };
+    return { database, ai, provider: this.config.aiProvider, aiRequired: false };
   }
 
   private async check(fn: () => Promise<unknown>) {
