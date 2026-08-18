@@ -245,7 +245,29 @@ export function LabShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [expanded]);
 
-  const currentIndex = STEP_LABELS.findIndex((s) => s.step === step);
+  /*
+   * "completed" is not a stop on the rail, so findIndex returns -1 for it.
+   * The rail marks a stop done when its index is below this one, and every
+   * index is above -1, which left a finished lab with nothing to revisit:
+   * the one state where every step is worth looking back at. Treat it as
+   * past the last stop instead.
+   */
+  const currentIndex =
+    step === "completed" ? STEP_LABELS.length : STEP_LABELS.findIndex((s) => s.step === step);
+
+  /*
+   * The submitted steps, in order. Revisiting walks this rather than the rail,
+   * so Back and Next skip a step that was never answered and stop at the ends
+   * instead of wrapping.
+   */
+  const reviewable = useMemo(
+    () => STEP_LABELS.filter((s) => s.step !== "intro" && history[s.step]).map((s) => s.step),
+    [history],
+  );
+  const reviewPosition = reviewing ? reviewable.indexOf(reviewing) : -1;
+  const previousStep = reviewPosition > 0 ? reviewable[reviewPosition - 1] : undefined;
+  const nextStep =
+    reviewPosition >= 0 && reviewPosition < reviewable.length - 1 ? reviewable[reviewPosition + 1] : undefined;
 
   const body = useMemo(() => {
     if (!attemptId || step === "intro") {
@@ -501,6 +523,12 @@ export function LabShell({
               entry={history[reviewing]}
               onClose={() => setReviewing(null)}
               currentLabel={labelFor(step)}
+              position={reviewPosition + 1}
+              total={reviewable.length}
+              onPrevious={previousStep ? () => setReviewing(previousStep) : undefined}
+              previousLabel={previousStep ? labelFor(previousStep) : undefined}
+              onNext={nextStep ? () => setReviewing(nextStep) : undefined}
+              nextLabel={nextStep ? labelFor(nextStep) : undefined}
             />
           ) : (
             <>
@@ -544,19 +572,32 @@ function PastStep({
   entry,
   currentLabel,
   onClose,
+  position,
+  total,
+  onPrevious,
+  previousLabel,
+  onNext,
+  nextLabel,
 }: {
   label: string;
   entry?: { answer: unknown; aiFeedback: unknown; deterministic: unknown };
   currentLabel: string;
   onClose: () => void;
+  /** Which submitted step this is, and how many there are, as "3 of 6". */
+  position: number;
+  total: number;
+  onPrevious?: () => void;
+  previousLabel?: string;
+  onNext?: () => void;
+  nextLabel?: string;
 }) {
   return (
     <>
       <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: tokens.space(3) }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: tokens.space(3), flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: tokens.size.xs, textTransform: "uppercase", letterSpacing: 1, color: tokens.color.textFaint }}>
-              Looking back
+              Looking back · {position} of {total}
             </div>
             <strong style={{ fontSize: tokens.size.lg }}>{label}</strong>
           </div>
@@ -565,6 +606,16 @@ function PastStep({
         <p style={{ color: tokens.color.textMuted, fontSize: tokens.size.sm, margin: `${tokens.space(3)} 0 0` }}>
           Already submitted and scored, so this is read-only.
         </p>
+        {/* Walking the steps with buttons, rather than only by aiming at a
+            stop on the rail. Each end simply has nothing to go to. */}
+        <div style={{ display: "flex", gap: tokens.space(2), marginTop: tokens.space(4), flexWrap: "wrap" }}>
+          <Button variant="ghost" onClick={onPrevious} disabled={!onPrevious}>
+            {previousLabel ? `← ${previousLabel}` : "← Previous step"}
+          </Button>
+          <Button variant="ghost" onClick={onNext} disabled={!onNext}>
+            {nextLabel ? `${nextLabel} →` : "Next step →"}
+          </Button>
+        </div>
       </Card>
 
       {entry ? (
@@ -633,6 +684,9 @@ function summariseAnswer(answer: unknown): string {
 }
 
 function labelFor(step: LabStep): string {
+  // "completed" is a state rather than a stop, so it has no rail entry: the
+  // review panel would otherwise offer to return you to "the next step".
+  if (step === "completed") return "the summary";
   return STEP_LABELS.find((s) => s.step === step)?.label ?? "the next step";
 }
 

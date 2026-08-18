@@ -1,3 +1,4 @@
+import type { LabStep } from "@curated-labs/shared";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -9,9 +10,15 @@ import { TopNavServer } from "@/features/dashboard/TopNavServer";
 
 export const metadata = { title: "Progress · Securacy" };
 
-const STEP_LABEL: Record<string, string> = {
+/**
+ * Typed against LabStep rather than string, so adding a step to the workflow
+ * fails the build here instead of showing the learner a raw key. Attack
+ * surfaces was added and this map was not, which is exactly what it did.
+ */
+const STEP_LABEL: Record<LabStep, string> = {
   intro: "Brief",
   architecture_issues: "Architectural analysis",
+  attack_surfaces: "Attack surfaces",
   threats: "Threat identification",
   prioritization: "Assessing priority",
   mitigations: "Mitigation mapping",

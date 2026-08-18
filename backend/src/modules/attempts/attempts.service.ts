@@ -209,6 +209,16 @@ export class AttemptsService {
     return { submission, replayed: false as const };
   }
 
+  /**
+   * Records the graded result and moves the attempt on.
+   *
+   * The position only ever moves forwards. Submitting a step the learner has
+   * already passed used to set the position to whatever followed THAT step,
+   * so re-answering step one from the decision step dropped them back to
+   * attack surfaces with five steps of progress apparently undone. A late
+   * retry of an earlier submission is a normal thing for a client to do, so
+   * the answer is to keep the later position rather than to refuse the write.
+   */
   private async finish(
     attemptId: string,
     submissionId: string,
@@ -216,7 +226,11 @@ export class AttemptsService {
     ai: { feedback: unknown; status: "ok" | "unavailable" | "invalid" },
     deterministic: unknown,
     advanceTo?: LabStep,
+    currentStep?: LabStep,
   ) {
+    const proposed = advanceTo ?? nextStep(step);
+    const target =
+      currentStep && stepIndex(currentStep) > stepIndex(proposed) ? currentStep : proposed;
     const [submission, attempt] = await this.prisma.$transaction([
       this.prisma.labStepSubmission.update({
         where: { id: submissionId },
@@ -227,7 +241,7 @@ export class AttemptsService {
       }),
       this.prisma.labAttempt.update({
         where: { id: attemptId },
-        data: { currentStep: advanceTo ?? nextStep(step) },
+        data: { currentStep: target },
       }),
     ]);
     return { submission, attempt };
@@ -267,7 +281,7 @@ export class AttemptsService {
       totalIssues: issues.length,
       hints,
     };
-    const done = await this.finish(attemptId, submission.id, "architecture_issues", ai, deterministic);
+    const done = await this.finish(attemptId, submission.id, "architecture_issues", ai, deterministic, undefined, attempt.currentStep);
 
     // Flat participation award: this step is explicitly not graded, so
     // there is nothing to cheer about, only credit for having done it.
@@ -327,7 +341,7 @@ export class AttemptsService {
       labId: attempt.labId,
     });
 
-    const done = await this.finish(attemptId, submission.id, "attack_surfaces", ai, graded);
+    const done = await this.finish(attemptId, submission.id, "attack_surfaces", ai, graded, undefined, attempt.currentStep);
 
     const candidates: PointCandidate[] = graded.identifiedIds.map((id) => ({
       reason: "attack_surface_identified",
@@ -416,6 +430,7 @@ export class AttemptsService {
       ai,
       { matchedThreatIds: [...matchedIds], revealed: shouldReveal },
       advanceTo,
+      attempt.currentStep,
     );
 
     // One award per matched canonical threat, deduped per attempt: matching
@@ -474,7 +489,7 @@ export class AttemptsService {
     const ai = await this.ai.priorityFeedback({ answer, canonical, labId: attempt.labId });
     const comparison = comparePriorities(answer.items, canonical);
 
-    const done = await this.finish(attemptId, submission.id, "prioritization", ai, { comparison });
+    const done = await this.finish(attemptId, submission.id, "prioritization", ai, { comparison }, undefined, attempt.currentStep);
 
     const candidates: PointCandidate[] = comparison
       .filter((c) => c.matches)
@@ -520,7 +535,7 @@ export class AttemptsService {
     const graded = deterministic.pairings;
 
     const ai = await this.ai.mitigationFeedback({ graded, answerKey, labId: attempt.labId });
-    const done = await this.finish(attemptId, submission.id, "mitigations", ai, deterministic);
+    const done = await this.finish(attemptId, submission.id, "mitigations", ai, deterministic, undefined, attempt.currentStep);
 
     const candidates: PointCandidate[] = graded
       .filter((g) => g.isCorrect)

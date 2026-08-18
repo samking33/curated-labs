@@ -10,18 +10,40 @@ import { PerformanceCard, type Range } from "./PerformanceCard";
 import { WeeklyProgressCard, type DayState, type Segment } from "./WeeklyProgressCard";
 import { AiAssistantCard } from "./AiAssistantCard";
 
-/** The five lab steps, mapped onto the dial's checkpoints. */
-const SEGMENTS: Segment[] = [
-  { label: "Architecture", icon: "book", step: "architecture_issues" },
-  { label: "Surfaces", icon: "book", step: "attack_surfaces" },
-  { label: "Threats", icon: "headphones", step: "threats" },
-  { label: "Priority", icon: "bulb", step: "prioritization" },
-  { label: "Mitigations", icon: "badge", step: "mitigations" },
-];
-
-/** The dial counts the five answerable steps, so it walks the shared order
- *  rather than keeping a second copy that drifts when a step is added. */
+/**
+ * One checkpoint per step the learner actually answers.
+ *
+ * "intro" and "completed" are states rather than work, so the answerable
+ * steps are everything between them. Deriving the list here means the dial
+ * cannot disagree with the workflow about how many steps there are, which it
+ * previously did: the decision step was missing a checkpoint while the count
+ * came from a different list, so a learner on that step saw "06/5".
+ */
 const STEP_ORDER = LAB_STEPS;
+const ANSWERABLE_STEPS = LAB_STEPS.filter((s) => s !== "intro" && s !== "completed");
+
+const SEGMENT_LABELS: Record<(typeof ANSWERABLE_STEPS)[number], { label: string; icon: Segment["icon"] }> = {
+  architecture_issues: { label: "Architecture", icon: "book" },
+  attack_surfaces: { label: "Surfaces", icon: "book" },
+  threats: { label: "Threats", icon: "headphones" },
+  prioritization: { label: "Priority", icon: "bulb" },
+  mitigations: { label: "Mitigations", icon: "badge" },
+  release_decision: { label: "Decision", icon: "badge" },
+};
+
+const SEGMENTS: Segment[] = ANSWERABLE_STEPS.map((step) => ({ step, ...SEGMENT_LABELS[step] }));
+
+/**
+ * How many answerable steps are behind the learner. Being ON a step means it
+ * is not finished, so this is the count before it, and "completed" means all
+ * of them.
+ */
+function stepsFinished(currentStep?: string): number {
+  if (!currentStep) return 0;
+  const index = STEP_ORDER.indexOf(currentStep as (typeof STEP_ORDER)[number]);
+  if (index < 0) return 0;
+  return Math.max(0, Math.min(ANSWERABLE_STEPS.length, index - 1));
+}
 
 export function Dashboard({
   me,
@@ -65,7 +87,7 @@ export function Dashboard({
   });
 
   const inFlight = progress?.recent.find((r) => r.status !== "completed");
-  const stepNumber = inFlight ? STEP_ORDER.indexOf(inFlight.currentStep) : 0;
+  const stepNumber = stepsFinished(inFlight?.currentStep);
   // Real and derived from the attempt's actual startedAt: not a client-side
   // stopwatch. Both inputs are frozen props, so server and client agree.
   const startedAgo = inFlight ? formatTimeAgo(new Date(nowIso), new Date(inFlight.startedAt)) : null;
@@ -125,7 +147,7 @@ export function Dashboard({
           onOpenDayLab={openLab}
           todayIndex={today.weekdayIndex}
           completed={stepNumber}
-          total={5}
+          total={SEGMENTS.length}
           segments={SEGMENTS}
           currentStep={inFlight?.currentStep}
           startedAgo={startedAgo}
