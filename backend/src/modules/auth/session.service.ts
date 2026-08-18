@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   SESSION_ABSOLUTE_MS,
+  SESSION_COOKIE,
   SESSION_IDLE_MS,
   type OrgRole,
   type PlatformRole,
@@ -128,4 +129,23 @@ export class SessionService {
       maxAge: Math.floor(SESSION_ABSOLUTE_MS / 1000),
     };
   }
+}
+
+/**
+ * The session cookie is signed, so its integrity can be checked without a
+ * database round trip. That is what lets the rate limiter key on a session:
+ * an unsigned cookie could be invented per request, and every forged value
+ * would open a fresh bucket, which is no rate limit at all.
+ *
+ * Returns undefined for a missing, malformed or tampered cookie, so callers
+ * treat all three the same way.
+ */
+export function readSessionCookie(request: {
+  cookies?: Record<string, string | undefined>;
+  unsignCookie?: (value: string) => { valid: boolean; value: string | null };
+}): string | undefined {
+  const raw = request.cookies?.[SESSION_COOKIE];
+  if (!raw || !request.unsignCookie) return undefined;
+  const unsigned = request.unsignCookie(raw);
+  return unsigned.valid && unsigned.value ? unsigned.value : undefined;
 }

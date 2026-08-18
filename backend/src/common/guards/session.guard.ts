@@ -1,9 +1,9 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { FastifyRequest } from "fastify";
-import { CSRF_HEADER, SESSION_COOKIE, type AccessContext } from "@curated-labs/shared";
+import { CSRF_HEADER, type AccessContext } from "@curated-labs/shared";
 import { IS_PUBLIC } from "../decorators/public.decorator";
-import { SessionService, type SessionUser } from "../../modules/auth/session.service";
+import { SessionService, readSessionCookie, type SessionUser } from "../../modules/auth/session.service";
 
 export type AuthContext = SessionUser & {
   /** Access context for the org named in the route, if any. */
@@ -34,7 +34,7 @@ export class SessionGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<
       FastifyRequest & { auth?: AuthContext; cookies?: Record<string, string> }
     >();
-    const token = request.cookies?.[SESSION_COOKIE];
+    const token = readSessionCookie(request);
 
     if (isPublic) {
       // Still resolve when a cookie is present: /labs shows attempt state for

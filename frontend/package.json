@@ -9,11 +9,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "^15.5.4",
+    "@curated-labs/shared": "workspace:*",
+    "next": "^15.5.23",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "zod": "^3.24.1",
-    "@curated-labs/shared": "workspace:*"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

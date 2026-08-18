@@ -9,12 +9,30 @@ import { API_PREFIX } from "@curated-labs/shared";
 import { AppModule } from "./app.module";
 import { CONFIG, type AppConfig } from "./config";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+import { readSessionCookie } from "./modules/auth/session.service";
+
+/**
+ * Which peers may set X-Forwarded-For, read before the app exists because the
+ * adapter is built first.
+ *
+ * Naming the addresses rather than counting hops is the part that matters: a
+ * hop count still trusts whoever opened the socket, so anyone able to reach
+ * this port directly could present a new address on every request and defeat
+ * address-based rate limiting. The default is loopback, which is the frontend
+ * rewrite proxy on the same host. Set TRUSTED_PROXY when it lives elsewhere.
+ */
+const TRUSTED_PROXY = process.env.TRUSTED_PROXY ?? "loopback";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    // 1 MB cap: the largest legitimate body is a free-text answer (§19).
-    new FastifyAdapter({ bodyLimit: 1_048_576, trustProxy: true }),
+    /**
+     * 1 MB cap: the largest legitimate body is a free-text answer.
+     *
+     * trustProxy names the peers allowed to set X-Forwarded-For rather than
+     * saying `true`, which would take that header from anyone.
+     */
+    new FastifyAdapter({ bodyLimit: 1_048_576, trustProxy: TRUSTED_PROXY }),
   );
 
   const config = app.get<AppConfig>(CONFIG);
@@ -26,15 +44,20 @@ async function bootstrap() {
   });
   await app.register(cookie, { secret: config.SESSION_SECRET });
 
-  // Rate limits on everything, with auth and AI tightened in their controllers.
+  /**
+   * A signed session gets its own bucket, because behind the frontend's
+   * reverse proxy every request would otherwise share one address. Anything
+   * without a valid signature falls back to the address, and the signature is
+   * what makes that safe: an unsigned cookie can be invented per request, and
+   * each invented value would open a fresh bucket.
+   */
   await app.register(rateLimit, {
     max: 300,
     timeWindow: "1 minute",
-    // Session cookie beats IP: shared NAT should not throttle a whole office.
-    keyGenerator: (req) => (req as { cookies?: Record<string, string> }).cookies?.cl_session ?? req.ip,
+    keyGenerator: (req) => readSessionCookie(req as never) ?? req.ip,
   });
 
-  // Strict allowlist (§19) — never reflect an arbitrary Origin with credentials.
+  // Strict allowlist: never reflect an arbitrary Origin with credentials.
   app.enableCors({
     origin: [config.WEB_APP_URL],
     credentials: true,
@@ -47,7 +70,7 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter(config.isHardened));
   app.enableShutdownHooks();
 
-  await app.listen(config.PORT, "0.0.0.0");
+  await app.listen(config.PORT, process.env.BIND_HOST ?? "0.0.0.0");
 
   const logger = new Logger("bootstrap");
   logger.log(`API listening on ${config.API_BASE_URL}${API_PREFIX}`);

@@ -170,7 +170,7 @@
      * clicked something in it.
      */
     window.addEventListener("keydown", function (evt) {
-      if (evt.key === "Escape") window.parent.postMessage(JSON.stringify({ event: "dfd-escape" }), "*");
+      if (evt.key === "Escape") window.parent.postMessage(JSON.stringify({ event: "dfd-escape" }), window.location.origin);
     });
 
     // Expose the live instance on the iframe's own window. Attack-surface
@@ -212,7 +212,8 @@
         }
       }
 
-      window.parent.postMessage(JSON.stringify(payload), "*");
+      // Same origin as the parent, so name it rather than broadcasting.
+      window.parent.postMessage(JSON.stringify(payload), window.location.origin);
     });
   }
 })();

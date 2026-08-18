@@ -52,7 +52,13 @@ export function DfdEditorFrame({
 
       if (data.event === "init" && !loadedRef.current) {
         loadedRef.current = true;
-        frameRef.current?.contentWindow?.postMessage(JSON.stringify(loadAction(compileToDrawioXml(graph))), "*");
+        // Pinned to this origin: the editor is served from here, so a wildcard
+        // would only matter if the frame were navigated elsewhere, and then it
+        // would hand the diagram to whatever had replaced it.
+        frameRef.current?.contentWindow?.postMessage(
+          JSON.stringify(loadAction(compileToDrawioXml(graph))),
+          window.location.origin,
+        );
       } else if (data.event === "save" && mode === "edit") {
         onSave?.(data.xml);
       } else if (data.event === "dfd-selection") {

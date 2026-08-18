@@ -14,6 +14,7 @@ import { tokens } from "@/lib/tokens";
  */
 export function DevLogin({ returnTo, primary = false }: { returnTo: string; primary?: boolean }) {
   const [email, setEmail] = useState("learner@example.com");
+  const [passcode, setPasscode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,10 +24,13 @@ export function DevLogin({ returnTo, primary = false }: { returnTo: string; prim
     try {
       await api("/auth/dev-login", {
         method: "POST",
-        body: JSON.stringify({ email, name: email.split("@")[0] }),
+        body: JSON.stringify({ email, name: email.split("@")[0], passcode }),
       });
       // Full reload so the server components pick up the new session cookie.
-      window.location.href = returnTo;
+      // Only ever to a path on this site: `returnTo` arrives from the query
+      // string, so an absolute or scheme-relative value would let a link to
+      // our own login page bounce the visitor somewhere else after signing in.
+      window.location.href = returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/app";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Dev sign-in failed.");
       setBusy(false);
@@ -43,6 +47,25 @@ export function DevLogin({ returnTo, primary = false }: { returnTo: string; prim
           {error}
         </div>
       )}
+      <input
+        value={passcode}
+        onChange={(e) => setPasscode(e.target.value)}
+        type="password"
+        placeholder="Passcode (hosted deployments only)"
+        aria-label="Development sign-in passcode"
+        autoComplete="off"
+        onKeyDown={(e) => e.key === "Enter" && signIn()}
+        style={{
+          width: "100%",
+          marginBottom: tokens.space(2),
+          padding: tokens.space(2),
+          background: tokens.color.bg,
+          color: tokens.color.text,
+          border: `1px solid ${tokens.color.borderStrong}`,
+          borderRadius: tokens.radius.md,
+          fontSize: tokens.size.base,
+        }}
+      />
       <div style={{ display: "flex", gap: tokens.space(2) }}>
         <input
           value={email}

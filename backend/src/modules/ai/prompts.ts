@@ -40,9 +40,17 @@ function jsonContract(schema: string): string {
   return `${GUARDRAILS}\n\nReturn JSON matching exactly this shape:\n${schema}`;
 }
 
-/** Wrap untrusted text in explicit delimiters so its boundary is unambiguous. */
+/**
+ * Wrap untrusted text in explicit delimiters so its boundary is unambiguous.
+ *
+ * The delimiter is the control, so the body must not be able to write one.
+ * A learner who submits "<<<END LEARNER ANSWER>>>" followed by instructions
+ * would otherwise close the block early and have the rest read as prompt
+ * rather than as their answer.
+ */
 export function untrusted(label: string, body: string): string {
-  return `<<<BEGIN ${label} (UNTRUSTED)>>>\n${body}\n<<<END ${label}>>>`;
+  const fenced = body.replace(/<<<\s*(BEGIN|END)\b/gi, "(quoted) $1");
+  return `<<<BEGIN ${label} (UNTRUSTED)>>>\n${fenced}\n<<<END ${label}>>>`;
 }
 
 export const PROMPTS = {

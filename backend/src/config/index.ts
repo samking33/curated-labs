@@ -45,6 +45,15 @@ const schema = z.object({
   ALLOW_DEV_LOGIN: z.coerce.boolean().default(false),
 
   /**
+   * Shared secret for dev login. Required whenever dev login is on and the
+   * deployment is reachable over the internet: without it, anyone who can
+   * guess an email address signs in as that person, including an
+   * organization owner. Left empty for local work, where the listener is not
+   * public and E2E runs need no passcode.
+   */
+  DEV_LOGIN_PASSCODE: z.string().default(""),
+
+  /**
    * Scenario generation is a distinct workload from coaching calls: it needs
    * nemotron-3-super-120b-a12b specifically (benchmarked: it's the only
    * candidate model that reliably returns a valid full scenario), which runs
@@ -115,11 +124,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (cfg.NODE_ENV === "production" && cfg.SESSION_SECRET.includes("replace-with")) {
     throw new Error("SESSION_SECRET is still the placeholder value");
   }
+  // NODE_ENV alone does not settle this: the hosted entry point sets
+  // development so dev login can run at all, so key the requirement off
+  // whether the deployment is actually exposed.
+  const hardened = cfg.NODE_ENV === "production" || cfg.PUBLIC_DEPLOYMENT || cfg.WEB_APP_URL.startsWith("https://");
+  if (cfg.ALLOW_DEV_LOGIN && hardened && cfg.DEV_LOGIN_PASSCODE.length < 12) {
+    throw new Error(
+      "ALLOW_DEV_LOGIN is on for a publicly reachable deployment, so DEV_LOGIN_PASSCODE must be set to at least 12 characters",
+    );
+  }
 
   return {
     ...cfg,
     isProduction: cfg.NODE_ENV === "production",
-    isHardened: cfg.NODE_ENV === "production" || cfg.PUBLIC_DEPLOYMENT || cfg.WEB_APP_URL.startsWith("https://"),
+    isHardened: hardened,
     googleConfigured: Boolean(cfg.GOOGLE_CLIENT_ID && cfg.GOOGLE_CLIENT_SECRET),
     nimConfigured: Boolean(cfg.NVIDIA_NIM_API_KEY),
     anthropicConfigured: Boolean(cfg.ANTHROPIC_API_KEY),

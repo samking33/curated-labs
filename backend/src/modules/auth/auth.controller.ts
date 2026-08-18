@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Inject, NotFoundException, Patch, Post, Query, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, Inject, NotFoundException, Patch, Post, Query, Req, Res, UnauthorizedException } from "@nestjs/common";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { timingSafeEqual } from "node:crypto";
 import {
   CSRF_COOKIE,
   SESSION_COOKIE,
@@ -15,12 +16,13 @@ import type { AuthContext } from "../../common/guards/session.guard";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "./auth.service";
-import { SessionService } from "./session.service";
+import { SessionService, readSessionCookie } from "./session.service";
 import { AuditService } from "../audit/audit.service";
 
 const devLoginSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).default("Dev User"),
+  passcode: z.string().default(""),
 });
 
 @Controller("auth")
@@ -71,6 +73,23 @@ export class AuthController {
     @Res() reply: FastifyReply,
   ) {
     if (!this.config.ALLOW_DEV_LOGIN) throw new NotFoundException();
+    // Dev login trusts whatever address it is given, so on a deployment the
+    // internet can reach it is only as strong as this passcode. Compared in
+    // constant time, and required by loadConfig() in that case, so an empty
+    // one here means local development.
+    if (this.config.DEV_LOGIN_PASSCODE) {
+      const expected = Buffer.from(this.config.DEV_LOGIN_PASSCODE);
+      const given = Buffer.from(body.passcode);
+      if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
+        await this.audit.record({
+          action: "auth.dev_login_rejected",
+          targetType: "user",
+          targetId: body.email,
+          request,
+        });
+        throw new UnauthorizedException("Incorrect passcode.");
+      }
+    }
     const user = await this.auth.devLogin(body.email, body.name);
     await this.issueSession(user.id, request, reply);
     return reply.send({ ok: true, userId: user.id });
@@ -78,8 +97,7 @@ export class AuthController {
 
   @Post("logout")
   async logout(@Req() request: FastifyRequest, @Res() reply: FastifyReply, @CurrentUser() user: AuthContext) {
-    const cookies = (request as FastifyRequest & { cookies?: Record<string, string> }).cookies;
-    await this.sessions.revoke(cookies?.[SESSION_COOKIE]);
+    await this.sessions.revoke(readSessionCookie(request));
     await this.audit.record({
       actorUserId: user.userId,
       action: "auth.logout",
@@ -145,7 +163,7 @@ export class AuthController {
       userAgent: request.headers["user-agent"],
     });
     const opts = this.sessions.cookieOptions();
-    void reply.setCookie(SESSION_COOKIE, token, opts);
+    void reply.setCookie(SESSION_COOKIE, token, { ...opts, signed: true });
     void reply.setCookie(CSRF_COOKIE, csrfToken, { ...opts, httpOnly: false });
   }
 }
