@@ -37,6 +37,9 @@ import type { AuthContext } from "../../common/guards/session.guard";
  * synchronous request should hold open. `requestGeneration` enqueues and
  * returns immediately; the client polls `jobStatus` until it settles.
  */
+/** How many orphaned jobs one boot will pick up, so a restart cannot stampede. */
+const MAX_RESUMED_JOBS = 5;
+
 @Injectable()
 export class PlaygroundGenerationService {
   private readonly logger = new Logger(PlaygroundGenerationService.name);
@@ -47,6 +50,47 @@ export class PlaygroundGenerationService {
     private readonly audit: AuditService,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
+
+  /**
+   * Generation runs in this process, so any job still marked queued or
+   * running when it starts belongs to a process that is gone: nothing else
+   * will ever finish it. Until a restart, those rows sat untouched unless a
+   * client happened to keep polling that exact job, which is how a scenario
+   * could be started, lost to a restart, and simply never appear.
+   *
+   * Recent ones are picked up and run again; anything past the stale window
+   * is failed so the learner is told rather than left waiting. Bounding both
+   * the age and the count keeps a restart from stampeding the model, and
+   * means a job that takes the process down with it cannot be retried
+   * forever: after the window it is failed like any other.
+   */
+  async onModuleInit() {
+    const cutoff = new Date(Date.now() - this.config.PLAYGROUND_STALE_JOB_MS);
+    const orphans = await this.prisma.playgroundGenerationJob.findMany({
+      where: { status: { in: ["queued", "running"] } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true, difficulty: true },
+    });
+    if (!orphans.length) return;
+
+    const resumable = orphans.filter((j) => j.createdAt > cutoff).slice(0, MAX_RESUMED_JOBS);
+    const resumableIds = new Set(resumable.map((j) => j.id));
+    const abandoned = orphans.filter((j) => !resumableIds.has(j.id));
+
+    if (abandoned.length) {
+      await this.prisma.playgroundGenerationJob.updateMany({
+        where: { id: { in: abandoned.map((j) => j.id) } },
+        data: { status: "failed", finishedAt: new Date(), errorMessage: "Generation was interrupted. Try again." },
+      });
+    }
+    this.logger.log({ resumed: resumable.length, failed: abandoned.length }, "reclaimed generation jobs left by a previous process");
+
+    for (const job of resumable) {
+      void this.runJob(job.id, job.difficulty ?? undefined).catch((err) =>
+        this.logger.error({ err, jobId: job.id }, "resumed generation job crashed"),
+      );
+    }
+  }
 
   /* ------------------------------------------------------------- sessions */
 
@@ -128,6 +172,7 @@ export class PlaygroundGenerationService {
           userId: user.userId,
           organizationId: orgId,
           prompt: body.prompt,
+          difficulty: body.difficulty ?? null,
           idempotencyKey: options.idempotencyKey ?? null,
         },
       });

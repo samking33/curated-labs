@@ -662,6 +662,9 @@ model PlaygroundGenerationJob {
   /// Untrusted learner text, stored verbatim for audit. Never rendered as HTML,
   /// never logged in full in production (§20 mirrors curated AI logging rules).
   prompt         String
+  /// The difficulty the learner asked for, kept so a job orphaned by a
+  /// restart resumes as requested rather than at the default.
+  difficulty     LabDifficulty?
   /// Learner-safe text ONLY — never model output, never the validator's error
   /// list. Those are logged server-side and discarded, not persisted here.
   errorMessage   String?             @map("error_message")
