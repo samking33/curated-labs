@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, NotFoundException, Patch, Post, Query, Req, Res, UnauthorizedException } from "@nestjs/common";
+import { Body, Controller, Get, HttpException, HttpStatus, Inject, NotFoundException, Patch, Post, Query, Req, Res, UnauthorizedException } from "@nestjs/common";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
@@ -17,6 +17,7 @@ import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "./auth.service";
 import { SessionService, readSessionCookie } from "./session.service";
+import { devLoginThrottle } from "./dev-login-throttle";
 import { AuditService } from "../audit/audit.service";
 
 const devLoginSchema = z.object({
@@ -87,6 +88,12 @@ export class AuthController {
           targetId: body.email,
           request,
         });
+        // Only wrong guesses are capped. Locking out a correct passcode too
+        // would let anyone keep the real owner out by guessing badly on
+        // purpose, which trades one problem for a worse one.
+        if (devLoginThrottle.recordFailure()) {
+          throw new HttpException("Too many attempts. Try again later.", HttpStatus.TOO_MANY_REQUESTS);
+        }
         throw new UnauthorizedException("Incorrect passcode.");
       }
     }
