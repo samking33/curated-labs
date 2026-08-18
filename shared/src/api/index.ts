@@ -254,6 +254,15 @@ export const progressSchema = z.object({
   labsStarted: z.number().int(),
   labsCompleted: z.number().int(),
   stepsSubmitted: z.number().int(),
+  /**
+   * What the learner submitted on each day of this week, Sunday first. Real
+   * submissions, so an empty day means nothing was done that day rather than
+   * simply being in the past.
+   */
+  week: z
+    .array(z.array(z.object({ labTitle: z.string(), labSlug: z.string(), step: z.string(), at: z.string() })))
+    .length(7)
+    .optional(),
   recent: z.array(
     z.object({
       attemptId: z.string(),

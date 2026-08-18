@@ -53,9 +53,16 @@ export function Dashboard({
   const opened = Math.max(started * 5, 1);
   const completedPercent = Math.min(100, Math.round((stepsSubmitted / opened) * 100));
 
-  const days: DayState[] = Array.from({ length: 7 }, (_, i) =>
-    i < today.weekdayIndex ? "done" : i === today.weekdayIndex ? "current" : "todo",
-  );
+  /*
+   * Derived from what was actually submitted, not from the date. Colouring
+   * every past day as done said the same thing whether the learner had
+   * worked all week or not touched it.
+   */
+  const week = progress?.week;
+  const days: DayState[] = Array.from({ length: 7 }, (_, i) => {
+    if ((week?.[i]?.length ?? 0) > 0) return "done";
+    return i === today.weekdayIndex ? "current" : "todo";
+  });
 
   const inFlight = progress?.recent.find((r) => r.status !== "completed");
   const stepNumber = inFlight ? STEP_ORDER.indexOf(inFlight.currentStep) : 0;
@@ -114,6 +121,8 @@ export function Dashboard({
 
         <WeeklyProgressCard
           days={days}
+          week={week}
+          onOpenDayLab={openLab}
           todayIndex={today.weekdayIndex}
           completed={stepNumber}
           total={5}

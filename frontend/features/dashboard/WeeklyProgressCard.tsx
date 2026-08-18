@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { tokens } from "@/lib/tokens";
 import { card } from "./PerformanceCard";
 
@@ -65,6 +66,8 @@ function arcPath(r: number, fromDeg: number, toDeg: number) {
 
 export function WeeklyProgressCard({
   days,
+  week,
+  onOpenDayLab,
   todayIndex,
   completed,
   total,
@@ -74,10 +77,12 @@ export function WeeklyProgressCard({
   timerLabel,
   onOpenLab,
 }: {
-  /** done/current/todo per day of the week, derived from attempt history.
-   *  There is no per-day breakdown behind it, so the strip is a read-only
-   *  status display rather than a selector. */
+  /** done/current/todo per day of the week, derived from real submissions. */
   days: DayState[];
+  /** What was submitted on each day, Sunday first, for the day detail below. */
+  week?: { labTitle: string; labSlug: string; step: string; at: string }[][];
+  /** Opens a lab named in the day detail. */
+  onOpenDayLab?: (slug: string) => void;
   todayIndex: number;
   completed: number;
   total: number;
@@ -89,12 +94,13 @@ export function WeeklyProgressCard({
   timerLabel: string;
   onOpenLab?: () => void;
 }) {
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const fraction = total > 0 ? Math.min(1, completed / total) : 0;
 
   return (
     <section style={{ ...card(), padding: tokens.space(5) }}>
-      {/* Day strip: status only, and labelled as such. There is no per-day
-          view for it to switch to. */}
+      {/* Pick a day to see what was submitted on it. The states come from
+          real submissions, so a past day with no work reads as empty. */}
       <div
         style={{
           fontSize: tokens.size.xs,
@@ -104,16 +110,21 @@ export function WeeklyProgressCard({
           marginBottom: tokens.space(3),
         }}
       >
-        Your activity this week
+        Your activity this week · pick a day
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: tokens.space(2) }}>
         {DAYS.map((d, i) => {
-          const active = i === todayIndex;
+          const isToday = i === todayIndex;
+          const open = i === selectedDay;
+          const count = week?.[i]?.length ?? 0;
           return (
             <div key={d} style={{ display: "grid", justifyItems: "center", gap: tokens.space(3) }}>
-              <span
-                aria-label={DAY_NAMES[i]}
-                aria-current={active ? "date" : undefined}
+              <button
+                type="button"
+                onClick={() => setSelectedDay(open ? null : i)}
+                aria-label={`${DAY_NAMES[i]}: ${count === 0 ? "nothing submitted" : `${count} step${count === 1 ? "" : "s"} submitted`}`}
+                aria-pressed={open}
+                aria-current={isToday ? "date" : undefined}
                 style={{
                   // Fixed 42px circles overflow a phone-width card; cap instead.
                   width: "100%",
@@ -124,18 +135,72 @@ export function WeeklyProgressCard({
                   placeItems: "center",
                   fontSize: tokens.size.base,
                   fontFamily: tokens.font.sans,
-                  fontWeight: active ? 600 : 400,
-                  background: active ? tokens.color.accent : tokens.color.surfaceSunken,
-                  color: active ? tokens.color.accentText : tokens.color.text,
+                  fontWeight: isToday || open ? 600 : 400,
+                  cursor: "pointer",
+                  padding: 0,
+                  background: isToday ? tokens.color.accent : tokens.color.surfaceSunken,
+                  color: isToday ? tokens.color.accentText : tokens.color.text,
+                  border: open ? `2px solid ${tokens.color.ink}` : "2px solid transparent",
                 }}
               >
                 {d}
-              </span>
+              </button>
               <DayDot state={days[i] ?? "todo"} />
             </div>
           );
         })}
       </div>
+
+      {selectedDay !== null && (
+        <div
+          style={{
+            marginTop: tokens.space(3),
+            padding: tokens.space(3),
+            background: tokens.color.surfaceSunken,
+            borderRadius: tokens.radius.md,
+            fontSize: tokens.size.sm,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: tokens.space(2) }}>
+            <strong>{DAY_NAMES[selectedDay]}</strong>
+            <button
+              type="button"
+              onClick={() => setSelectedDay(null)}
+              aria-label="Close day detail"
+              style={{ border: "none", background: "none", color: tokens.color.textMuted, cursor: "pointer", fontSize: tokens.size.base }}
+            >
+              ×
+            </button>
+          </div>
+          {(week?.[selectedDay]?.length ?? 0) === 0 ? (
+            <p style={{ margin: `${tokens.space(1)} 0 0`, color: tokens.color.textMuted }}>
+              Nothing submitted on this day.
+            </p>
+          ) : (
+            <ul style={{ listStyle: "none", margin: `${tokens.space(2)} 0 0`, padding: 0, display: "grid", gap: tokens.space(1) }}>
+              {week![selectedDay]!.map((entry, k) => (
+                <li key={`${entry.at}-${k}`} style={{ display: "flex", justifyContent: "space-between", gap: tokens.space(2) }}>
+                  <span>
+                    {onOpenDayLab ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenDayLab(entry.labSlug)}
+                        style={{ border: "none", background: "none", padding: 0, color: tokens.color.accentInk, cursor: "pointer", fontSize: tokens.size.sm, textDecoration: "underline" }}
+                      >
+                        {entry.labTitle}
+                      </button>
+                    ) : (
+                      entry.labTitle
+                    )}
+                    <span style={{ color: tokens.color.textMuted }}> · {entry.step.replace(/_/g, " ")}</span>
+                  </span>
+                  <span style={{ color: tokens.color.textFaint, whiteSpace: "nowrap" }}>{formatClock(entry.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* radial dial */}
       <div style={{ display: "grid", placeItems: "center", flex: 1, minHeight: 0, marginTop: tokens.space(4) }}>
@@ -326,6 +391,14 @@ export function WeeklyProgressCard({
       </button>
     </section>
   );
+}
+
+/** Submission times are ISO strings from the server; show only the clock. */
+function formatClock(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function DayDot({ state }: { state: DayState }) {

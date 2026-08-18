@@ -635,10 +635,54 @@ export class AttemptsService {
       orderBy: { startedAt: "desc" },
       include: { lab: { select: { title: true, slug: true } }, _count: { select: { submissions: true } } },
     });
+
+    /*
+     * What the learner actually did on each day of this week.
+     *
+     * The dashboard's day strip used to colour every day before today as
+     * done, which said nothing about whether the learner had worked. These
+     * are real submissions, so an empty day reads as empty and a day can be
+     * opened to see what happened on it.
+     *
+     * Bucketed against the server's clock, which is the same reference the
+     * dashboard uses to decide which day is today.
+     */
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+
+    const submissions = await this.prisma.labStepSubmission.findMany({
+      where: { attempt: { userId }, submittedAt: { gte: weekStart } },
+      orderBy: { submittedAt: "asc" },
+      select: {
+        step: true,
+        submittedAt: true,
+        attempt: { select: { lab: { select: { title: true, slug: true } } } },
+      },
+    });
+
+    const week = Array.from({ length: 7 }, () => [] as {
+      labTitle: string;
+      labSlug: string;
+      step: string;
+      at: string;
+    }[]);
+    for (const sub of submissions) {
+      const index = Math.floor((sub.submittedAt.getTime() - weekStart.getTime()) / 86_400_000);
+      if (index < 0 || index > 6) continue;
+      week[index]!.push({
+        labTitle: sub.attempt.lab.title,
+        labSlug: sub.attempt.lab.slug,
+        step: sub.step,
+        at: sub.submittedAt.toISOString(),
+      });
+    }
+
     return {
       labsStarted: attempts.length,
       labsCompleted: attempts.filter((a) => a.status === "completed").length,
       stepsSubmitted: attempts.reduce((sum, a) => sum + a._count.submissions, 0),
+      week,
       recent: attempts.slice(0, 10).map((a) => ({
         attemptId: a.id,
         labTitle: a.lab.title,
